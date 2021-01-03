@@ -30,8 +30,8 @@ template commonInit(p, newFileProc: untyped, inheritable, blocking: bool) =
       if not blocking:
         fd.setBlocking(blocking)
 
-    setFlags(handles[0])
-    setFlags(handles[1])
+    setFlags(handles[0].FD)
+    setFlags(handles[1].FD)
 
   p.rd = newFileProc(handles[0].FD)
   p.wr = newFileProc(handles[1].FD)
