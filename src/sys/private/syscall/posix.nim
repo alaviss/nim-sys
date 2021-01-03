@@ -17,8 +17,8 @@ export std_posix
 ## whether the symbol is available on the target operating system.
 
 when defined(bsd) or defined(linux) or defined(macosx):
-  let FIOCLEX* {.importc, header: "<sys/ioctl.h>".}: cint
-  let FIONCLEX* {.importc, header: "<sys/ioctl.h>".}: cint
+  let FIOCLEX* {.importc, header: "<sys/ioctl.h>".}: culong
+  let FIONCLEX* {.importc, header: "<sys/ioctl.h>".}: culong
 
 when defined(bsd) or defined(linux):
   proc dup3*(oldfd, newfd, flags: cint): cint {.importc, header: "<unistd.h>".}
