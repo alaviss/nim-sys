@@ -21,7 +21,7 @@ template commonInit(p, newFileProc: untyped, inheritable, blocking: bool) =
 
     posixChk pipe2(handles, flags), ErrorPipeCreation
   else:
-    posixChk pipe(handles) == -1, ErrorPipeCreation
+    posixChk pipe(handles), ErrorPipeCreation
 
     template setFlags(fd: untyped) =
       if not inheritable:
