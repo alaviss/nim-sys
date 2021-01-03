@@ -1,0 +1,70 @@
+name: CI
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [version-1-4, devel]
+        target: [linux, macos]
+        arch: [i386, amd64]
+        include:
+          - target: linux
+            builder: ubuntu-18.04
+          - target: macos
+            builder: macos-10.15
+          - target: linux
+            arch: amd64
+            branch: devel
+            pushdocs: true
+        exclude:
+          - target: macos
+            arch: amd64
+    name: '${{ matrix.target }} on ${{ matrix.arch }} (Nim ${{ matrix.branch }})'
+    runs-on: ${{ matrix.builder }}
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: nim-sys
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          path: nim-sys
+
+      - name: Setup Nim
+        uses: alaviss/setup-nim@0.1.1
+        with:
+          path: nim
+          version: ${{ matrix.branch }}
+
+      - name: Install dependencies
+        run: nimble install -y --depsOnly
+
+      - name: Run tests
+        run: nimble test
+
+      - name: Build docs
+        shell: bash
+        run: |
+          branch=${{ github.ref }}
+          branch=${branch##*/}
+          nimble doc --project --outdir:htmldocs \
+            '--git.url:https://github.com/${{ github.repository }}' \
+            '--git.commit:${{ github.sha }}' \
+            "--git.devel:$branch" \
+            src/sys/*.nim
+          # Ignore failures for older Nim
+          cp htmldocs/{the,}index.html || true
+
+      - name: Publish docs
+        if: >
+          matrix.pushdocs && github.event_name == 'push' &&
+          github.ref == 'refs/heads/master'
+        uses: crazy-max/ghaction-github-pages@v2
+        with:
+          build_dir: nim-sys/htmldocs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
