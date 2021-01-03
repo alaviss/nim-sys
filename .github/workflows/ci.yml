@@ -20,7 +20,7 @@ jobs:
             pushdocs: true
         exclude:
           - target: macos
-            arch: amd64
+            arch: i386
     name: '${{ matrix.target }} on ${{ matrix.arch }} (Nim ${{ matrix.branch }})'
     runs-on: ${{ matrix.builder }}
 
@@ -35,11 +35,27 @@ jobs:
         with:
           path: nim-sys
 
+      - name: Configure Nim for 32 bit GCC (Linux-only)
+        if: matrix.arch == 'i386' && runner.os == 'Linux'
+        run:
+          sudo dpkg --add-architecture i386
+          sudo apt-fast update -qq
+          sudo DEBIAN_FRONTEND='noninteractive' apt-fast install \
+            --no-install-recommends -yq gcc-multilib g++-multilib
+          mkdir -p ~/.config/nim
+          cat << EOF > ~/.config/nim/nim.cfg
+          gcc.options.always %= "${gcc.options.always} -m32"
+          gcc.cpp.options.always %= "${gcc.cpp.options.always} -m32"
+          gcc.options.linker %= "${gcc.options.linker} -m32"
+          gcc.cpp.options.linker %= "${gcc.cpp.options.linker} -m32"
+          EOF
+
       - name: Setup Nim
-        uses: alaviss/setup-nim@0.1.1
+        uses: alaviss/setup-nim@c2c782c567cfee9e41dd85d0db80e48deb889540
         with:
           path: nim
           version: ${{ matrix.branch }}
+          architecture: ${{ matrix.arch }}
 
       - name: Install dependencies
         run: nimble install -y --depsOnly
