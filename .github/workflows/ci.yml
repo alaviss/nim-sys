@@ -27,6 +27,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: nim-sys
 
     steps:
       - name: Checkout
@@ -58,11 +59,9 @@ jobs:
 
       - name: Install dependencies
         run: nimble install -y --depsOnly
-        working-directory: nim-sys
 
       - name: Run tests
         run: nimble test
-        working-directory: nim-sys
 
       - name: Build docs
         shell: bash
@@ -76,7 +75,6 @@ jobs:
             src/sys/*.nim
           # Ignore failures for older Nim
           cp htmldocs/{the,}index.html || true
-        working-directory: nim-sys
 
       - name: Publish docs
         if: >
