@@ -27,7 +27,6 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: nim-sys
 
     steps:
       - name: Checkout
@@ -44,10 +43,10 @@ jobs:
             --no-install-recommends -yq gcc-multilib g++-multilib
           mkdir -p ~/.config/nim
           cat << EOF > ~/.config/nim/nim.cfg
-          gcc.options.always %= "${gcc.options.always} -m32"
-          gcc.cpp.options.always %= "${gcc.cpp.options.always} -m32"
-          gcc.options.linker %= "${gcc.options.linker} -m32"
-          gcc.cpp.options.linker %= "${gcc.cpp.options.linker} -m32"
+          gcc.options.always %= "\${gcc.options.always} -m32"
+          gcc.cpp.options.always %= "\${gcc.cpp.options.always} -m32"
+          gcc.options.linker %= "\${gcc.options.linker} -m32"
+          gcc.cpp.options.linker %= "\${gcc.cpp.options.linker} -m32"
           EOF
 
       - name: Setup Nim
@@ -59,9 +58,11 @@ jobs:
 
       - name: Install dependencies
         run: nimble install -y --depsOnly
+        working-directory: nim-sys
 
       - name: Run tests
         run: nimble test
+        working-directory: nim-sys
 
       - name: Build docs
         shell: bash
@@ -75,6 +76,7 @@ jobs:
             src/sys/*.nim
           # Ignore failures for older Nim
           cp htmldocs/{the,}index.html || true
+        working-directory: nim-sys
 
       - name: Publish docs
         if: >
