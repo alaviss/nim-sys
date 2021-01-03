@@ -1,6 +1,6 @@
 # An abstraction layer for common operating system services
 
-[![CI status](https://github.com/alaviss/nim-sys/workflows/CI/badge.svg)](https://github.com/alaviss/dnsstamps/actions?query=workflow%3ACI)
+[![CI status](https://github.com/alaviss/nim-sys/workflows/CI/badge.svg)](https://github.com/alaviss/nim-sys/actions?query=workflow%3ACI)
 ![Minimum supported Nim version](https://img.shields.io/badge/nim-1.4.0%2B-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/alaviss/nim-sys?style=flat)](#license)
 
