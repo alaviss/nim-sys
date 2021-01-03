@@ -14,6 +14,8 @@ The goals are:
 
 Currently this project is a work-in-progress, and works here are aimed for upstreaming to the stdlib.
 
+- [API documentation](https://alaviss.github.io/nim-sys)
+
 ## On-going projects
 
 These stdlib modules are targeted for redesign/reimplementation (ordered by priority):
