@@ -95,8 +95,7 @@ proc setInheritable*(fd: AnyFD, inheritable: bool) {.docForward.} =
 
 when defined(nimdoc) or defined(posix):
   proc setBlocking*(fd: AnyFD, blocking: bool) {.docForward.} =
-    ## Controls the blocking state of `fd`, only supports POSIX and Unix-like
-    ## systems. Check for availability with `declared()` before use.
+    ## Controls the blocking state of `fd`, only available on POSIX systems.
 
 proc duplicate*[T: AnyFD](fd: T, inheritable = false): T {.docForward.} =
   ## Duplicate an OS resource handle. The duplicated handle will refer to the
