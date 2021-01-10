@@ -8,20 +8,9 @@
 
 import errors, syscall/posix
 
-proc `=destroy`[T: AnyFD](h: var Handle[T]) {.inline.} =
-  # While no conversions are necessary for the case of FD, it is
-  # needed for SocketFD, so ignore the hint.
-  {.push hint[ConvFromXToItselfNotNeeded]: off.}
-  if h.fd.FD != InvalidFD:
-    # NOTE: close() can return with an error or be interrupted
-    # (EINTR), but in most *nix implementations (sans HP-UX), the
-    # file descriptor is guaranteed to have been closed.
-    #
-    # According to POSIX, errors coming from close() should only be
-    # used for diagnostic purposes, so it is discarded here.
-    discard close h.fd.cint
-    h.fd = InvalidFD
-  {.pop.}
+proc close(fd: AnyFD) =
+  if close(fd.cint) == -1 and errno == EINVAL:
+    raise newClosedHandleDefect()
 
 proc setInheritable(fd: AnyFD, inheritable: bool) =
   when declared(FIOCLEX) and declared(FIONCLEX):

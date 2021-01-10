@@ -36,11 +36,27 @@ type
 
   Handle*[T: AnyFD] {.requiresInit.} = object
     ## An object used to associate a handle with a lifetime.
+    # Walkaround for nim-lang/Nim#16607
+    when true or not defined(release):
+      initialized: bool
     fd: T
+
+  ClosedHandleDefect* = object of Defect
+    ## Raised when close() is called on an invalid handle.
+    ##
+    ## Calling `close()` on a closed handle is extremely dangerous, as the
+    ## handle could have been re-used by the operating system for an another
+    ## resource requested by the application.
+    ##
+    ## This `Defect` is meant to be a bug catching measure before they
+    ## manifest.
 
 const
   InvalidFD* = cast[FD](-1)
     ## An invalid resource handle.
+
+  ErrorClosedHandle = "The resource handle has already been closed or is invalid"
+    ## Error message used for ClosedHandleDefect.
 
   ErrorSetInheritable = "Could not change the resource handle inheritable attribute"
     ## Error message used when setInheritable fails.
@@ -51,14 +67,51 @@ const
   ErrorDuplicate = "Could not duplicate resource handle"
     ## Error message used when duplicate fails.
 
+proc newClosedHandleDefect*(): ref ClosedHandleDefect {.inline.} =
+  newException(ClosedHandleDefect, ErrorClosedHandle)
+
 func `==`*(a, b: FD): bool {.borrow.}
   ## Equivalence operator for `FD`
 
 func `==`*(a, b: SocketFD): bool {.borrow.}
   ## Equivalence operator for `SocketFD`
 
-proc `=destroy`[T: AnyFD](h: var Handle[T]) {.inline, docForward.} =
+proc isInvalidFD*(fd: AnyFD): bool {.inline.} =
+  ## Check if `fd` equals to `InvalidFD`.
+  # While no conversions are necessary for the case of FD, it is
+  # needed for SocketFD, so ignore the hint.
+  {.push hint[ConvFromXToItselfNotNeeded]: off.}
+  result = fd.FD == InvalidFD
+  {.pop.}
+
+proc close*(fd: AnyFD) {.docForward.} =
+  ## Closes the resource handle `fd`.
+  ##
+  ## If the passed resource handle is not valid, `ClosedHandleDefect` will be
+  ## raised.
+
+proc close*[T: AnyFD](h: var Handle[T]) {.inline.} =
+  ## Close the handle owned by `h` and invalidating it.
+  ##
+  ## If `h` is invalid, `ClosedHandleDefect` will be raised.
+  try:
+    close h.fd
+  finally:
+    # Always invalidate `h.fd` to avoid double-close on destruction.
+    h.fd = InvalidFD
+
+proc `=destroy`[T: AnyFD](h: var Handle[T]) {.inline.} =
   ## Destroy the file handle.
+  when false:
+    # TODO: Once nim-lang/Nim#16607 is fixed, make this into a debug check
+    assert h.initialized, "Handle was not initialized before destruction, this is a compiler bug."
+  else:
+    # Walkaround for nim-lang/Nim#16607
+    if not h.initialized:
+      return
+
+  if not h.fd.isInvalidFD():
+    close h
 
 proc `=copy`*[T: AnyFD](dest: var Handle[T], src: Handle[T]) {.error.}
   ## Copying a file handle is forbidden. Either a `ref Handle` should be used
@@ -67,12 +120,18 @@ proc `=copy`*[T: AnyFD](dest: var Handle[T], src: Handle[T]) {.error.}
 proc initHandle*[T: AnyFD](fd: T): Handle[T] {.inline.} =
   ## Creates a Handle owning the passed `fd`. The `fd` shall then be freed
   ## automatically when the `Handle` go out of scope.
-  Handle[T](fd: fd)
+  when false:
+    Handle[T](fd: fd)
+  else:
+    Handle[T](initialized: true, fd: fd)
 
 proc newHandle*[T: AnyFD](fd: T): ref Handle[T] {.inline.} =
   ## Creates a Handle owning the passed `fd`. The `fd` shall then be freed
   ## automatically when there are no reference to the returned `ref Handle`.
-  (ref Handle[T])(fd: fd)
+  when false:
+    (ref Handle[T])(fd: fd)
+  else:
+    (ref Handle[T])(initialized: true, fd: fd)
 
 proc get*[T: AnyFD](h: Handle[T]): T {.inline.} =
   ## Returns the resource handle held by the passed `Handle`.
