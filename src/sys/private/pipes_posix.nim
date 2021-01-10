@@ -36,18 +36,18 @@ template commonInit(p, newFileProc: untyped, inheritable, blocking: bool) =
   p.rd = newFileProc(handles[0].FD)
   p.wr = newFileProc(handles[1].FD)
 
-proc initPipe(flags: set[FileFlag]): tuple[rd, wr: File] =
+template initPipeImpl() {.dirty.} =
   commonInit(result, initFile,
              inheritable = ffInheritable in flags, blocking = true)
 
-proc newPipe(flags: set[FileFlag]): tuple[rd, wr: ref File] =
+template newPipeImpl() {.dirty.} =
   commonInit(result, newFile,
              inheritable = ffInheritable in flags, blocking = true)
 
-proc initAsyncPipe(flags: set[FileFlag]): tuple[rd, wr: AsyncFile] =
+template initAsyncPipeImpl() {.dirty.} =
   commonInit(result, initAsyncFile,
              inheritable = ffInheritable in flags, blocking = false)
 
-proc newAsyncPipe(flags: set[FileFlag]): tuple[rd, wr: ref AsyncFile] =
+template newAsyncPipeImpl() {.dirty.} =
   commonInit(result, newAsyncFile,
              inheritable = ffInheritable in flags, blocking = false)

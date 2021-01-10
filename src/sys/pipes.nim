@@ -10,44 +10,44 @@
 
 import system except File
 import files
-import private/utils
 
 const
   ErrorPipeCreation = "Could not create pipe"
     ## Error message used when pipe creation fails.
 
-proc initPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: File] {.docForward.} =
+when defined(posix):
+  include private/pipes_posix
+else:
+  {.error: "This module has not been ported to your operating system.".}
+
+proc initPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: File] =
   ## Creates a new anonymous pipe.
   ##
   ## Returns a tuple containing the read and write endpoints of the pipe.
   ##
   ## Only the flag `ffInheritable` is supported.
+  initPipeImpl()
 
-proc newPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: ref File] {.docForward.} =
+proc newPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: ref File] =
   ## Creates a new anonymous pipe as references.
   ##
   ## Returns a tuple containing the read and write endpoints of the pipe.
   ##
   ## Only the flag `ffInheritable` is supported.
+  newPipeImpl()
 
-proc initAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: AsyncFile] {.docForward.} =
+proc initAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: AsyncFile] =
   ## Creates a new asynchronous anonymous pipe.
   ##
   ## Returns a tuple containing the read and write endpoints of the pipe.
   ##
   ## Only the flag `ffInheritable` is supported.
+  initAsyncPipeImpl()
 
-proc newAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: ref AsyncFile] {.docForward.} =
+proc newAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: ref AsyncFile] =
   ## Creates a new asynchrounous anonymous pipe as references.
   ##
   ## Returns a tuple containing the read and write endpoints of the pipe.
   ##
   ## Only the flag `ffInheritable` is supported.
-
-
-when defined(nimdoc):
-  discard "Hide implementation from nim doc"
-elif defined(posix):
-  include private/pipes_posix
-else:
-  {.error: "This module has not been ported to your operating system.".}
+  newAsyncPipeImpl()
