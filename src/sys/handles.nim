@@ -115,10 +115,11 @@ proc `=destroy`[T: AnyFD](h: var Handle[T]) {.inline.} =
 
 proc `=copy`*[T: AnyFD](dest: var Handle[T], src: Handle[T]) {.error.}
   ## Copying a file handle is forbidden. Either a `ref Handle` should be used
-  ## or `duplicate` should be used to make a duplicate of the handle.
+  ## or `duplicate` should be used to make a handle refering to the same
+  ## resource.
 
 proc initHandle*[T: AnyFD](fd: T): Handle[T] {.inline.} =
-  ## Creates a Handle owning the passed `fd`. The `fd` shall then be freed
+  ## Creates a `Handle` owning the passed `fd`. The `fd` shall then be freed
   ## automatically when the `Handle` go out of scope.
   when false:
     Handle[T](fd: fd)
@@ -126,26 +127,26 @@ proc initHandle*[T: AnyFD](fd: T): Handle[T] {.inline.} =
     Handle[T](initialized: true, fd: fd)
 
 proc newHandle*[T: AnyFD](fd: T): ref Handle[T] {.inline.} =
-  ## Creates a Handle owning the passed `fd`. The `fd` shall then be freed
-  ## automatically when there are no reference to the returned `ref Handle`.
+  ## Creates a `ref Handle` owning the passed `fd`. The `fd` shall then be
+  ## freed automatically when the returned `ref Handle[T]` is collected by the
+  ## GC.
   when false:
     (ref Handle[T])(fd: fd)
   else:
     (ref Handle[T])(initialized: true, fd: fd)
 
 proc get*[T: AnyFD](h: Handle[T]): T {.inline.} =
-  ## Returns the resource handle held by the passed `Handle`.
+  ## Returns the resource handle held by `h`.
   ##
-  ## The returned handle will stay alive for the duration of `h`.
+  ## The returned handle will stay valid for the duration of `h`.
   ##
   ## **Note**: Do **not** close the returned handle. If ownership is wanted,
   ## use `take` instead.
   h.fd
 
 proc take*[T: AnyFD](h: var Handle[T]): T {.inline.} =
-  ## Release the resource handle held by the passed `Handle` to the caller.
-  ##
-  ## The passed `Handle` will then be invalidated.
+  ## Returns the resource handle held by `h` and release ownership to the
+  ## caller. `h` will then be invalidated.
   result = h.fd
   h.fd = InvalidFD
 
@@ -162,7 +163,8 @@ proc duplicate*[T: AnyFD](fd: T, inheritable = false): T {.docForward.} =
   ## `dup`:idx: on POSIX systems.
   ##
   ## The duplicated handle will not be inherited automatically by child
-  ## processes. The parameter `inheritable` can be used to change this behavior.
+  ## processes. The parameter `inheritable` can be used to change this
+  ## behavior.
 
 proc duplicateTo*[T: AnyFD](fd, target: T, inheritable = false) {.docForward.} =
   ## Duplicate the resource handle `fd` to `target`, making `target` refers
