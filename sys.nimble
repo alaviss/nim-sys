@@ -17,6 +17,6 @@ requires "https://github.com/disruptek/testes >= 0.7.12"
 
 task test, "Run test suite":
   when defined(windows):
-    exec "testes.cmd --path:" & srcDir
+    exec "testes.cmd"
   else:
-    exec "testes --path:" & srcDir
+    exec "testes"
