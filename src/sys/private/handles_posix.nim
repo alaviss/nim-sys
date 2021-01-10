@@ -8,11 +8,18 @@
 
 import errors, syscall/posix
 
-proc close(fd: AnyFD) =
+type
+  FDImpl = cint
+    ## The native implementation of FD.
+
+template closeImpl() {.dirty.} =
+  # The handle should be closed on any other error for most POSIX systems (sans
+  # HP-UX, which leave the handle dangling on EINTR, but it's not supported
+  # at the moment).
   if close(fd.cint) == -1 and errno == EINVAL:
     raise newClosedHandleDefect()
 
-proc setInheritable(fd: AnyFD, inheritable: bool) =
+template setInheritableImpl() {.dirty.} =
   when declared(FIOCLEX) and declared(FIONCLEX):
     if inheritable:
       posixChk ioctl(fd.cint, FIONCLEX), ErrorSetInheritable
@@ -27,7 +34,7 @@ proc setInheritable(fd: AnyFD, inheritable: bool) =
       fdFlags = fdFlags or FD_CLOEXEC
     posixChk fcntl(fd.cint, F_SETFD, fdFlags), ErrorSetInheritable
 
-proc setBlocking(fd: AnyFD, blocking: bool) =
+template setBlockingImpl() {.dirty.} =
   var flags = fcntl(fd.cint, F_GETFL)
   posixChk flags, ErrorSetBlocking
   if blocking:
@@ -36,7 +43,7 @@ proc setBlocking(fd: AnyFD, blocking: bool) =
     flags = flags or O_NONBLOCK
   posixChk fcntl(fd.cint, F_SETFL, flags), ErrorSetBlocking
 
-proc duplicate[T: AnyFD](fd: T, inheritable: bool): T =
+template duplicateImpl() {.dirty.} =
   if inheritable:
     result = fcntl(fd.cint, F_DUPFD, 0)
   else:
@@ -44,7 +51,7 @@ proc duplicate[T: AnyFD](fd: T, inheritable: bool): T =
 
   posixChk result, ErrorDuplicate
 
-proc duplicateTo[T: AnyFD](fd, target: T, inheritable: bool) =
+template duplicateToImpl() {.dirty.} =
   if inheritable:
     posixChk dup2(fd, target), ErrorDuplicate
   else:

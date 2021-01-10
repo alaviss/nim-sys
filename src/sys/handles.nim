@@ -19,12 +19,26 @@
 ##     # The handle will be closed automatically once the scope ends
 
 import system except io
-import private/utils
+
+const
+  ErrorClosedHandle = "The resource handle has already been closed or is invalid"
+    ## Error message used for ClosedHandleDefect.
+
+  ErrorSetInheritable = "Could not change the resource handle inheritable attribute"
+    ## Error message used when setInheritable fails.
+
+  ErrorSetBlocking {.used.} = "Could not change the resource handle blocking attribute"
+    ## Error message used when setBlocking fails.
+
+  ErrorDuplicate = "Could not duplicate resource handle"
+    ## Error message used when duplicate fails.
+
+when defined(posix):
+  include private/handles_posix
+else:
+  {.error: "This module has not been ported to your operating system.".}
 
 type
-  FDImpl = (when defined(windows): uint else: cint)
-    ## The representative type for the OS resource handle
-
   FD* = distinct FDImpl
     ## The type of the OS resource handle provided by the operating system.
 
@@ -55,18 +69,6 @@ const
   InvalidFD* = cast[FD](-1)
     ## An invalid resource handle.
 
-  ErrorClosedHandle = "The resource handle has already been closed or is invalid"
-    ## Error message used for ClosedHandleDefect.
-
-  ErrorSetInheritable = "Could not change the resource handle inheritable attribute"
-    ## Error message used when setInheritable fails.
-
-  ErrorSetBlocking {.used.} = "Could not change the resource handle blocking attribute"
-    ## Error message used when setBlocking fails.
-
-  ErrorDuplicate = "Could not duplicate resource handle"
-    ## Error message used when duplicate fails.
-
 proc newClosedHandleDefect*(): ref ClosedHandleDefect {.inline.} =
   newException(ClosedHandleDefect, ErrorClosedHandle)
 
@@ -84,11 +86,12 @@ proc isInvalidFD*(fd: AnyFD): bool {.inline.} =
   result = fd.FD == InvalidFD
   {.pop.}
 
-proc close*(fd: AnyFD) {.docForward.} =
+proc close*(fd: AnyFD) =
   ## Closes the resource handle `fd`.
   ##
   ## If the passed resource handle is not valid, `ClosedHandleDefect` will be
   ## raised.
+  closeImpl()
 
 proc close*[T: AnyFD](h: var Handle[T]) {.inline.} =
   ## Close the handle owned by `h` and invalidating it.
@@ -150,14 +153,18 @@ proc take*[T: AnyFD](h: var Handle[T]): T {.inline.} =
   result = h.fd
   h.fd = InvalidFD
 
-proc setInheritable*(fd: AnyFD, inheritable: bool) {.docForward.} =
+proc setInheritable*(fd: AnyFD, inheritable: bool) =
   ## Controls whether `fd` can be inherited by a child process.
+  setInheritableImpl()
 
-when defined(nimdoc) or defined(posix):
-  proc setBlocking*(fd: AnyFD, blocking: bool) {.docForward.} =
-    ## Controls the blocking state of `fd`, only available on POSIX systems.
+proc setBlocking*(fd: AnyFD, blocking: bool) =
+  ## Controls the blocking state of `fd`, only available on POSIX systems.
+  when declared(setBlockingImpl):
+    setBlockingImpl()
+  else:
+    {.error: "setBlocking is not available for your operating system".}
 
-proc duplicate*[T: AnyFD](fd: T, inheritable = false): T {.docForward.} =
+proc duplicate*[T: AnyFD](fd: T, inheritable = false): T =
   ## Duplicate an OS resource handle. The duplicated handle will refer to the
   ## same resource as the original. This operation is commonly known as
   ## `dup`:idx: on POSIX systems.
@@ -165,14 +172,16 @@ proc duplicate*[T: AnyFD](fd: T, inheritable = false): T {.docForward.} =
   ## The duplicated handle will not be inherited automatically by child
   ## processes. The parameter `inheritable` can be used to change this
   ## behavior.
+  duplicateImpl()
 
-proc duplicateTo*[T: AnyFD](fd, target: T, inheritable = false) {.docForward.} =
+proc duplicateTo*[T: AnyFD](fd, target: T, inheritable = false) =
   ## Duplicate the resource handle `fd` to `target`, making `target` refers
   ## to the same resource as `fd`. This operation is commonly known as
   ## `dup2`:idx: on POSIX systems.
   ##
   ## The duplicated handle will not be inherited automatically by the child
   ## prrocess. The parameter `inheritable` can be used to change this behavior.
+  duplicateToImpl()
 
 proc duplicate*[T: AnyFD](h: Handle[T],
                           inheritable = false): Handle[T] {.inline.} =
@@ -194,10 +203,3 @@ proc duplicateTo*[T: AnyFD](h, target: Handle[T],
   ## The duplicated handle will not be inherited automatically by the child
   ## prrocess. The parameter `inheritable` can be used to change this behavior.
   duplicateTo(h.fd, target.fd, inheritable)
-
-when defined(nimdoc):
-  discard ## Hide implementation from nimdoc
-elif defined(posix):
-  include private/handles_posix
-else:
-  {.error: "This module has not been ported to your operating system.".}
