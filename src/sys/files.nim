@@ -11,12 +11,24 @@
 import system except io
 import std/asyncdispatch
 import handles
-import private/[errors, utils]
+import private/errors
+
+const
+  ErrorRead = "Could not read from file"
+    ## Error message used when reading fails.
+
+  ErrorWrite = "Could not write to file"
+    ## Error message used when writing fails.
+
+when defined(posix):
+  include private/files_posix
+else:
+  {.error: "This module has not been ported to your operating system.".}
 
 type
-  File* {.requiresInit.} = object
-    ## An object representing a file.
-    fd: Handle[FD] ## The file handle.
+  File* {.requiresInit.} = FileImpl
+    ## An object representing a file. This is an opaque object with
+    ## differing implementations depending on the target operating system.
 
   AsyncFile* {.borrow: `.`.} = distinct File
     ## The type used for files opened in asynchronous mode.
@@ -37,13 +49,6 @@ type
     ## Raised if an IO error occurred.
     bytesTransferred*: Natural ## Number of bytes transferred before the error.
 
-const
-  ErrorRead = "Could not read from file"
-    ## Error message used when reading fails.
-
-  ErrorWrite = "Could not write to file"
-    ## Error message used when writing fails.
-
 proc initIOError*(e: var IOError, bytesTransferred: Natural, errorCode: int32,
                   additionalInfo = "") {.inline.} =
   ## Initializes an IOError object.
@@ -56,78 +61,90 @@ proc newIOError*(bytesTransferred: Natural, errorCode: int32,
   result = new IOError
   result.initIOError(bytesTransferred, errorCode, additionalInfo)
 
-proc `=copy`*(dest: var File, src: File) {.error.}
-  ## Copying a File is not allowed. If multiple references to the same file
+proc `=copy`*(dest: var FileImpl, src: FileImpl) {.error.}
+  ## Copying a `File` is not allowed. If multiple references to the same file
   ## are wanted, consider using `ref File`.
 
-proc initFile*(fd: FD): File {.inline.} =
+proc close*(f: var AnyFile) =
+  ## Closes and invalidates the file `f`.
+  ##
+  ## If `f` is invalid, `ClosedHandleDefect` will be raised.
+  closeImpl()
+
+when declared(destroyFileImpl):
+  # XXX: Have to be declared separately due to nim-lang/Nim#16668
+  proc `=destroy`(f: var FileImpl) =
+    ## Default destructor for all File-derived types.
+    ##
+    ## Exposing this allows OS-specific implementations to override the default
+    ## destructor as needed.
+    destroyFileImpl()
+
+  proc `=destroy`(f: var AsyncFile) =
+    ## Default destructor for all File-derived types.
+    ##
+    ## Exposing this allows OS-specific implementations to override the default
+    ## destructor as needed.
+    destroyFileImpl()
+
+proc initFile*(fd: FD): File =
   ## Creates a new `File` object from an opened file handle.
   ##
   ## The ownership of the file handle will be transferred to the resulting
   ## `File`.
   ##
   ## **Note**: Only use this interface if you know what you are doing.
-  File(fd: initHandle(fd))
+  initFileImpl()
 
-proc newFile*(fd: FD): ref File {.inline.} =
+proc newFile*(fd: FD): ref File =
   ## Creates a new `ref File` from an opened file handle.
   ##
   ## The ownership of the file handle will be transferred to the resulting
   ## `ref File`.
   ##
   ## **Note**: Only use this interface if you know what you are doing.
-  (ref File)(fd: initHandle(fd))
+  newFileImpl()
 
-proc `=destroy`(f: var AsyncFile) =
-  if f.fd.get != InvalidFD:
-    unregister f.fd.get.AsyncFD
-    `=destroy` File(f)
-
-proc initAsyncFile*(fd: FD): AsyncFile {.inline.} =
-  ## Creates a new `AsyncFile` object from an opened file handle. The file
-  ## handle will then be registered with the dispatcher.
+proc initAsyncFile*(fd: FD): AsyncFile =
+  ## Creates a new `AsyncFile` object from an opened file handle.
+  ##
+  ## On POSIX systems, `fd` will be registered with the global dispatcher.
   ##
   ## The ownership of the file handle will be transferred to the resulting
   ## `AsyncFile`.
   ##
   ## **Note**: It is assumed that the file handle has been opened in
   ## asynchronous mode. Only use this interface if you know what you are doing.
-  result = AsyncFile initFile(fd)
-  if result.fd.get != InvalidFD:
-    register result.fd.get.AsyncFD
+  initAsyncFileImpl()
 
-proc newAsyncFile*(fd: FD): ref AsyncFile {.inline.} =
-  ## Creates a new `ref AsyncFile` object from an opened file handle. The file
-  ## handle will then be registered with the dispatcher.
+proc newAsyncFile*(fd: FD): ref AsyncFile =
+  ## Creates a new `ref AsyncFile` object from an opened file handle.
+  ##
+  ## On POSIX systems, `fd` will be registered with the global dispatcher.
   ##
   ## The ownership of the file handle will be transferred to the resulting
   ## `ref AsyncFile`.
   ##
   ## **Note**: It is assumed that the file handle has been opened in
   ## asynchronous mode. Only use this interface if you know what you are doing.
-  (ref AsyncFile) newFile(fd)
+  newAsyncFileImpl()
 
-proc close*(f: var AnyFile) {.inline.} =
-  ## Closes and invalidates the file `f`.
-  ##
-  ## If `f` is invalid, `ClosedHandleDefect` will be raised.
-  `=destroy` f
-
-proc fd*(f: AnyFile): FD {.inline.} =
+func fd*(f: AnyFile): FD {.inline.} =
   ## Returns the file handle held by `f`.
   ##
   ## The returned `FD` will stay valid for the duration of `f`.
-  f.fd.get
+  getFDImpl()
 
 proc takeFD*(f: var AnyFile): FD {.inline.} =
   ## Returns the file handle held by `f` and release ownership to the caller.
   ## `f` will then be invalidated.
-  f.fd.take
-  when f is AsyncFile:
-    unregister f.fd.AsyncFD
+  ##
+  ## On POSIX systems, the handle will be unregistered from the global
+  ## dispatcher if `f` is an `AsyncFile`.
+  takeFDImpl()
 
 proc read*[T: byte or char](f: File, b: var openArray[T]): int
-                           {.docForward, raises: [IOError].} =
+                           {.raises: [IOError].} =
   ## Reads `b.len` bytes from file `f` into `b`. Data may be written
   ## into `b` even when an error occurs. The IOError thrown will contain
   ## the number of bytes read thus far.
@@ -139,9 +156,9 @@ proc read*[T: byte or char](f: File, b: var openArray[T]): int
   ## no error will be raised.
   ##
   ## Returns the number of bytes read from `f`.
+  readImpl()
 
-proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int]
-                                  {.docForward.} =
+proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
   ## Reads `b.len` bytes from file `f` into `b`. Data may be written
   ## into `b` even when an error occurs. The IOError thrown will contain
   ## the number of bytes read thus far.
@@ -153,18 +170,12 @@ proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int]
   ## no error will be raised.
   ##
   ## Returns the number of bytes read from `f`.
+  asyncReadImpl()
 
-proc write*[T: byte or char](f: File, b: openArray[T])
-           {.docForward, raises: [IOError].} =
+proc write*[T: byte or char](f: File, b: openArray[T]) {.raises: [IOError].} =
   ## Writes the contents of array `b` into file `f`.
+  writeImpl()
 
-proc write*[T: string or seq[byte]](f: AsyncFile, b: T): Future[void]
-           {.docForward.} =
+proc write*[T: string or seq[byte]](f: AsyncFile, b: T): Future[void] =
   ## Writes the contents of array `b` into file `f`.
-
-when defined(nimdoc):
-  discard "Hide implementation from nim doc"
-elif defined(posix):
-  include private/files_posix
-else:
-  {.error: "This module has not been ported to your operating system.".}
+  asyncWriteImpl()

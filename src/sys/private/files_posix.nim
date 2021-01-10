@@ -8,9 +8,62 @@
 
 import syscall/posix
 
-proc read[T: byte or char](f: File, b: var openArray[T]): int =
+type
+  FileImpl {.requiresInit.} = object
+    handle: Handle[FD]
+
+template cleanupFile(f: untyped) =
+  when f is AsyncFile or f is (ref AsyncFile):
+    if not f.toBaseFile.handle.get.isInvalidFD:
+      unregister f.toBaseFile.handle.get.AsyncFD
+  else:
+    discard "no special cleanup needed"
+
+template closeImpl() {.dirty.} =
+  cleanupFile f
+  close f.toBaseFile.handle
+
+template destroyFileImpl() {.dirty.} =
+  cleanupFile f
+  `=destroy` f.toBaseFile.handle
+
+template initFileImpl() {.dirty.} =
+  result = FileImpl(handle: initHandle(fd))
+
+template newFileImpl() {.dirty.} =
+  result = (ref FileImpl)(handle: initHandle(fd))
+
+template toBaseFile(f: untyped): untyped =
+  ## Walkaround for nim-lang/Nim#16666
+  when f is ref and f is not File:
+    f[].File
+  elif f is not File:
+    f.File
+  else:
+    f
+
+template makeAsyncFile(T, result, fd, initFileProc: untyped) =
+  result = T initFileProc(fd)
+  if not result.toBaseFile.handle.get.isInvalidFD:
+    register result.toBaseFile.handle.get.AsyncFD
+
+template initAsyncFileImpl() {.dirty.} =
+  makeAsyncFile(AsyncFile, result, fd, initFile)
+
+template newAsyncFileImpl() {.dirty.} =
+  makeAsyncFile(ref AsyncFile, result, fd, newFile)
+
+template getFDImpl() {.dirty.} =
+  result = get f.toBaseFile.handle
+
+template takeFDImpl() {.dirty.} =
+  cleanupFile f
+  result = take f.toBaseFile.handle
+
+template readImpl() {.dirty.} =
   while result < b.len:
-    let bytesRead = read(f.fd.get.cint, addr b[result], b.len - result)
+    let bytesRead = read(f.handle.get.cint, addr b[result],
+                         b.len - result)
     if bytesRead > 0:
       result.inc bytesRead
     elif bytesRead == 0:
@@ -18,7 +71,7 @@ proc read[T: byte or char](f: File, b: var openArray[T]): int =
     elif errno != EINTR and errno != EAGAIN:
       raise newIOError(result, errno, ErrorRead)
 
-proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
+template asyncReadImpl() {.dirty.} =
   assert b != nil, "The provided buffer is nil"
 
   result = newFuture[int]("files.read")
@@ -43,13 +96,13 @@ proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
     if not future.finished:
       future.complete totalRead
 
-  if not f.fd.get.AsyncFD.doRead():
-    f.fd.get.AsyncFD.addRead doRead
+  if not f.toBaseFile.handle.get.AsyncFD.doRead():
+    f.toBaseFile.handle.get.AsyncFD.addRead doRead
 
-proc write[T: byte or char](f: File, b: openArray[T]) =
+template writeImpl() {.dirty.} =
   var totalWritten = 0
   while totalWritten < b.len:
-    let bytesWritten = write(f.fd.get.cint, unsafeAddr b[totalWritten],
+    let bytesWritten = write(f.handle.get.cint, unsafeAddr b[totalWritten],
                              b.len - totalWritten)
     if bytesWritten > 0:
       totalWritten.inc bytesWritten
@@ -58,7 +111,7 @@ proc write[T: byte or char](f: File, b: openArray[T]) =
     elif errno != EINTR and errno != EAGAIN:
       raise newIOError(totalWritten, errno, ErrorWrite)
 
-proc write[T: string or seq[byte]](f: AsyncFile, b: T): Future[void] =
+template asyncWriteImpl() {.dirty.} =
   result = newFuture[void]("files.write")
   let future = result
   var totalWritten = 0
@@ -81,5 +134,5 @@ proc write[T: string or seq[byte]](f: AsyncFile, b: T): Future[void] =
     if not future.finished:
       complete future
 
-  if not f.fd.get.AsyncFD.doWrite():
-    f.fd.get.AsyncFD.addWrite doWrite
+  if not f.toBaseFile.handle.get.AsyncFD.doWrite():
+    f.toBaseFile.handle.get.AsyncFD.addWrite doWrite
