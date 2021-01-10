@@ -46,8 +46,8 @@ proc newPipe(flags: set[FileFlag]): tuple[rd, wr: ref File] =
 
 proc initAsyncPipe(flags: set[FileFlag]): tuple[rd, wr: AsyncFile] =
   commonInit(result, initAsyncFile,
-             inheritable = ffInheritable in flags, blocking = true)
+             inheritable = ffInheritable in flags, blocking = false)
 
 proc newAsyncPipe(flags: set[FileFlag]): tuple[rd, wr: ref AsyncFile] =
   commonInit(result, newAsyncFile,
-             inheritable = ffInheritable in flags, blocking = true)
+             inheritable = ffInheritable in flags, blocking = false)
