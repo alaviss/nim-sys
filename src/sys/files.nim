@@ -52,7 +52,7 @@ proc initIOError*(e: var IOError, bytesTransferred: Natural, errorCode: int32,
 
 proc newIOError*(bytesTransferred: Natural, errorCode: int32,
                  additionalInfo = ""): ref IOError =
-  ## Creates a new `ref IOError` object.
+  ## Creates a new `ref IOError`.
   result = new IOError
   result.initIOError(bytesTransferred, errorCode, additionalInfo)
 
@@ -132,7 +132,7 @@ proc read*[T: byte or char](f: File, b: var openArray[T]): int
   ## into `b` even when an error occurs. The IOError thrown will contain
   ## the number of bytes read thus far.
   ##
-  ## The function will read until `b` is filled or the end-of-file has
+  ## This function will read until `b` is filled or the end-of-file has
   ## been reached.
   ##
   ## If the file position is at the end-of-file, no data will be read and
@@ -146,7 +146,7 @@ proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int]
   ## into `b` even when an error occurs. The IOError thrown will contain
   ## the number of bytes read thus far.
   ##
-  ## The function will read until `b` is filled or the end-of-file has
+  ## This function will read until `b` is filled or the end-of-file has
   ## been reached.
   ##
   ## If the file position is at the end-of-file, no data will be read and
