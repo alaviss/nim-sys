@@ -157,12 +157,14 @@ proc setInheritable*(fd: AnyFD, inheritable: bool) =
   ## Controls whether `fd` can be inherited by a child process.
   setInheritableImpl()
 
+when not declared(setBlockingImpl):
+  # XXX: Pending nim-lang/Nim#16672 so we can fold this into setBlocking
+  template setBlockingImpl() =
+    {.error: "setBlocking is not available for your operating system".}
+
 proc setBlocking*(fd: AnyFD, blocking: bool) =
   ## Controls the blocking state of `fd`, only available on POSIX systems.
-  when declared(setBlockingImpl):
-    setBlockingImpl()
-  else:
-    {.error: "setBlocking is not available for your operating system".}
+  setBlockingImpl()
 
 proc duplicate*[T: AnyFD](fd: T, inheritable = false): T =
   ## Duplicate an OS resource handle. The duplicated handle will refer to the
