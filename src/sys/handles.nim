@@ -48,22 +48,17 @@ type
   AnyFD* = FD or SocketFD
     ## A typeclass representing any OS resource handles.
 
-  ClosedHandleDefect* = object of Defect
-    ## Raised when close() is called on an invalid handle.
-    ##
-    ## Calling `close()` on a closed handle is extremely dangerous, as the
-    ## handle could have been re-used by the operating system for an another
-    ## resource requested by the application.
-    ##
-    ## This `Defect` is meant to be a bug catching measure before they
-    ## manifest.
-
 const
   InvalidFD* = cast[FD](-1)
     ## An invalid resource handle.
 
-proc newClosedHandleDefect*(): ref ClosedHandleDefect {.inline.} =
-  newException(ClosedHandleDefect, ErrorClosedHandle)
+template raiseClosedHandleDefect*() =
+  ## Raises a Defect for closing an invalid/closed handle.
+  ##
+  ## Calling `close()` on an invalid/closed handle is extremely dangerous, as
+  ## the handle could have been re-used by the operating system for an another
+  ## resource requested by the application.
+  raise newException(Defect, ErrorClosedHandle)
 
 func `==`*(a, b: FD): bool {.borrow.}
   ## Equivalence operator for `FD`

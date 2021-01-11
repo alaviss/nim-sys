@@ -17,7 +17,7 @@ template closeImpl() {.dirty.} =
   # HP-UX, which leave the handle dangling on EINTR, but it's not supported
   # at the moment).
   if close(fd.cint) == -1 and errno == EINVAL:
-    raise newClosedHandleDefect()
+    raiseClosedHandleDefect()
 
 template setInheritableImpl() {.dirty.} =
   when declared(FIOCLEX) and declared(FIONCLEX):
