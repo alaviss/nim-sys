@@ -43,20 +43,22 @@ template setBlockingImpl() {.dirty.} =
     flags = flags or O_NONBLOCK
   posixChk fcntl(fd.cint, F_SETFL, flags), ErrorSetBlocking
 
-template duplicateImpl() {.dirty.} =
-  if inheritable:
-    result = fcntl(fd.cint, F_DUPFD, 0)
-  else:
-    result = fcntl(fd.cint, F_DUPFD_CLOEXEC, 0)
-
-  posixChk result, ErrorDuplicate
-
-template duplicateToImpl() {.dirty.} =
-  if inheritable:
-    posixChk dup2(fd, target), ErrorDuplicate
-  else:
-    when declared(dup3):
-      posixChk dup3(fd, target, O_CLOEXEC), ErrorDuplicate
+when false:
+  # NOTE: Staged until process spawning is added.
+  template duplicateImpl() {.dirty.} =
+    if inheritable:
+      result = fcntl(fd.cint, F_DUPFD, 0)
     else:
+      result = fcntl(fd.cint, F_DUPFD_CLOEXEC, 0)
+
+    posixChk result, ErrorDuplicate
+
+  template duplicateToImpl() {.dirty.} =
+    if inheritable:
       posixChk dup2(fd, target), ErrorDuplicate
-      target.setInheritable(inheritable)
+    else:
+      when declared(dup3):
+        posixChk dup3(fd, target, O_CLOEXEC), ErrorDuplicate
+      else:
+        posixChk dup2(fd, target), ErrorDuplicate
+        target.setInheritable(inheritable)

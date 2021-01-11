@@ -99,24 +99,26 @@ proc setBlocking*(fd: AnyFD, blocking: bool) =
   ## Controls the blocking state of `fd`, only available on POSIX systems.
   setBlockingImpl()
 
-proc duplicate*[T: AnyFD](fd: T, inheritable = false): T =
-  ## Duplicate an OS resource handle. The duplicated handle will refer to the
-  ## same resource as the original. This operation is commonly known as
-  ## `dup`:idx: on POSIX systems.
-  ##
-  ## The duplicated handle will not be inherited automatically by child
-  ## processes. The parameter `inheritable` can be used to change this
-  ## behavior.
-  duplicateImpl()
+when false:
+  # NOTE: Staged until process spawning is added.
+  proc duplicate*[T: AnyFD](fd: T, inheritable = false): T =
+    ## Duplicate an OS resource handle. The duplicated handle will refer to the
+    ## same resource as the original. This operation is commonly known as
+    ## `dup`:idx: on POSIX systems.
+    ##
+    ## The duplicated handle will not be inherited automatically by child
+    ## processes. The parameter `inheritable` can be used to change this
+    ## behavior.
+    duplicateImpl()
 
-proc duplicateTo*[T: AnyFD](fd, target: T, inheritable = false) =
-  ## Duplicate the resource handle `fd` to `target`, making `target` refers
-  ## to the same resource as `fd`. This operation is commonly known as
-  ## `dup2`:idx: on POSIX systems.
-  ##
-  ## The duplicated handle will not be inherited automatically by the child
-  ## prrocess. The parameter `inheritable` can be used to change this behavior.
-  duplicateToImpl()
+  proc duplicateTo*[T: AnyFD](fd, target: T, inheritable = false) =
+    ## Duplicate the resource handle `fd` to `target`, making `target` refers
+    ## to the same resource as `fd`. This operation is commonly known as
+    ## `dup2`:idx: on POSIX systems.
+    ##
+    ## The duplicated handle will not be inherited automatically by the child
+    ## prrocess. The parameter `inheritable` can be used to change this behavior.
+    duplicateToImpl()
 
 type
   Handle*[T: AnyFD] {.requiresInit.} = object
@@ -185,24 +187,3 @@ proc take*[T: AnyFD](h: var Handle[T]): T {.inline.} =
   ## caller. `h` will then be invalidated.
   result = h.fd
   h.fd = InvalidFD
-
-proc duplicate*[T: AnyFD](h: Handle[T],
-                          inheritable = false): Handle[T] {.inline.} =
-  ## Duplicate an OS resource handle. The duplicated handle will refer to the
-  ## same resource as the original. This operation is commonly known as
-  ## `dup`:idx: on POSIX systems.
-  ##
-  ## The duplicated handle will not be inherited automatically by child
-  ## processes. The parameter `inheritable` can be used to change this behavior.
-  result = initHandle InvalidFD
-  result.fd = h.fd.duplicate inheritable
-
-proc duplicateTo*[T: AnyFD](h, target: Handle[T],
-                            inheritable = false) {.inline.} =
-  ## Duplicate the resource handle `h` to `target`, making `target` refers
-  ## to the same resource as `h`. This operation is commonly known as
-  ## `dup2`:idx: on POSIX systems.
-  ##
-  ## The duplicated handle will not be inherited automatically by the child
-  ## prrocess. The parameter `inheritable` can be used to change this behavior.
-  duplicateTo(h.fd, target.fd, inheritable)
