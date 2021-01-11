@@ -48,13 +48,6 @@ type
   AnyFD* = FD or SocketFD
     ## A typeclass representing any OS resource handles.
 
-  Handle*[T: AnyFD] {.requiresInit.} = object
-    ## An object used to associate a handle with a lifetime.
-    # Walkaround for nim-lang/Nim#16607
-    when true or not defined(release):
-      initialized: bool
-    fd: T
-
   ClosedHandleDefect* = object of Defect
     ## Raised when close() is called on an invalid handle.
     ##
@@ -92,6 +85,46 @@ proc close*(fd: AnyFD) =
   ## If the passed resource handle is not valid, `ClosedHandleDefect` will be
   ## raised.
   closeImpl()
+
+proc setInheritable*(fd: AnyFD, inheritable: bool) =
+  ## Controls whether `fd` can be inherited by a child process.
+  setInheritableImpl()
+
+when not declared(setBlockingImpl):
+  # XXX: Pending nim-lang/Nim#16672 so we can fold this into setBlocking
+  template setBlockingImpl() =
+    {.error: "setBlocking is not available for your operating system".}
+
+proc setBlocking*(fd: AnyFD, blocking: bool) =
+  ## Controls the blocking state of `fd`, only available on POSIX systems.
+  setBlockingImpl()
+
+proc duplicate*[T: AnyFD](fd: T, inheritable = false): T =
+  ## Duplicate an OS resource handle. The duplicated handle will refer to the
+  ## same resource as the original. This operation is commonly known as
+  ## `dup`:idx: on POSIX systems.
+  ##
+  ## The duplicated handle will not be inherited automatically by child
+  ## processes. The parameter `inheritable` can be used to change this
+  ## behavior.
+  duplicateImpl()
+
+proc duplicateTo*[T: AnyFD](fd, target: T, inheritable = false) =
+  ## Duplicate the resource handle `fd` to `target`, making `target` refers
+  ## to the same resource as `fd`. This operation is commonly known as
+  ## `dup2`:idx: on POSIX systems.
+  ##
+  ## The duplicated handle will not be inherited automatically by the child
+  ## prrocess. The parameter `inheritable` can be used to change this behavior.
+  duplicateToImpl()
+
+type
+  Handle*[T: AnyFD] {.requiresInit.} = object
+    ## An object used to associate a handle with a lifetime.
+    # Walkaround for nim-lang/Nim#16607
+    when true or not defined(release):
+      initialized: bool
+    fd: T
 
 proc close*[T: AnyFD](h: var Handle[T]) {.inline.} =
   ## Close the handle owned by `h` and invalidating it.
@@ -152,38 +185,6 @@ proc take*[T: AnyFD](h: var Handle[T]): T {.inline.} =
   ## caller. `h` will then be invalidated.
   result = h.fd
   h.fd = InvalidFD
-
-proc setInheritable*(fd: AnyFD, inheritable: bool) =
-  ## Controls whether `fd` can be inherited by a child process.
-  setInheritableImpl()
-
-when not declared(setBlockingImpl):
-  # XXX: Pending nim-lang/Nim#16672 so we can fold this into setBlocking
-  template setBlockingImpl() =
-    {.error: "setBlocking is not available for your operating system".}
-
-proc setBlocking*(fd: AnyFD, blocking: bool) =
-  ## Controls the blocking state of `fd`, only available on POSIX systems.
-  setBlockingImpl()
-
-proc duplicate*[T: AnyFD](fd: T, inheritable = false): T =
-  ## Duplicate an OS resource handle. The duplicated handle will refer to the
-  ## same resource as the original. This operation is commonly known as
-  ## `dup`:idx: on POSIX systems.
-  ##
-  ## The duplicated handle will not be inherited automatically by child
-  ## processes. The parameter `inheritable` can be used to change this
-  ## behavior.
-  duplicateImpl()
-
-proc duplicateTo*[T: AnyFD](fd, target: T, inheritable = false) =
-  ## Duplicate the resource handle `fd` to `target`, making `target` refers
-  ## to the same resource as `fd`. This operation is commonly known as
-  ## `dup2`:idx: on POSIX systems.
-  ##
-  ## The duplicated handle will not be inherited automatically by the child
-  ## prrocess. The parameter `inheritable` can be used to change this behavior.
-  duplicateToImpl()
 
 proc duplicate*[T: AnyFD](h: Handle[T],
                           inheritable = false): Handle[T] {.inline.} =
