@@ -96,7 +96,7 @@ func checkedInc(u: var BiggestUint, i: Natural) {.inline.} =
   ##
   ## As it is made for safe file position increments, the message is
   ## personalized for that purpose.
-  {.push overflowCheck: on, rangeCheck: on.}
+  {.push checks: on.}
   let orig = u
   u += i
   if u < orig:
