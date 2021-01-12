@@ -91,14 +91,14 @@ func setPos(overlapped: CustomRef, pos: uint64) {.inline.} =
   overlapped.offset = DWORD(pos and high uint32)
   overlapped.offsetHigh = DWORD(pos shr 32)
 
-func checkedInc(u: var BiggestUint, i: Natural) {.inline.} =
+func checkedInc(u: var BiggestUInt, i: Natural) {.inline.} =
   ## Increment `u` by `i`, raises `OverflowDefect` if `u` overflows.
   ##
   ## As it is made for safe file position increments, the message is
   ## personalized for that purpose.
   {.push checks: on.}
   let orig = u
-  u += i
+  u += i.BiggestUInt
   if u < orig:
     raise newException(OverflowDefect, "File position overflow")
   {.pop.}
