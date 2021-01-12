@@ -35,6 +35,8 @@ const
 
 when defined(posix):
   include private/handles_posix
+elif defined(windows):
+  include private/handles_windows
 else:
   {.error: "This module has not been ported to your operating system.".}
 

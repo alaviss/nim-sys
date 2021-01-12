@@ -7,13 +7,15 @@ jobs:
       fail-fast: false
       matrix:
         branch: [version-1-4, devel]
-        target: [linux, macos]
+        target: [linux, macos, windows]
         arch: [i386, amd64]
         include:
           - target: linux
             builder: ubuntu-18.04
           - target: macos
             builder: macos-10.15
+          - target: windows
+            builder: windows-2019
           - target: linux
             arch: amd64
             branch: devel
@@ -49,6 +51,12 @@ jobs:
           gcc.options.linker %= "\${gcc.options.linker} -m32"
           gcc.cpp.options.linker %= "\${gcc.cpp.options.linker} -m32"
           EOF
+
+      - name: Install 32bit MinGW (Windows-only)
+        if: matrix.arch == 'i386' && runner.os == 'Linux'
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x86
 
       - name: Setup Nim
         uses: alaviss/setup-nim@0.1.1

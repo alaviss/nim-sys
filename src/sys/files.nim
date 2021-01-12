@@ -22,6 +22,8 @@ const
 
 when defined(posix):
   include private/files_posix
+elif defined(windows):
+  include private/files_windows
 else:
   {.error: "This module has not been ported to your operating system.".}
 
@@ -106,15 +108,19 @@ proc newFile*(fd: FD): ref File =
   newFileImpl()
 
 proc initAsyncFile*(fd: FD): AsyncFile =
-  ## Creates a new `AsyncFile` object from an opened file handle.
-  ##
-  ## On POSIX systems, `fd` will be registered with the global dispatcher.
+  ## Creates a new `AsyncFile` object from an opened file handle. `fd` will be
+  ## registered with the global dispatcher.
   ##
   ## The ownership of the file handle will be transferred to the resulting
   ## `AsyncFile`.
   ##
   ## **Note**: It is assumed that the file handle has been opened in
   ## asynchronous mode. Only use this interface if you know what you are doing.
+  ##
+  ## **Platform specific details**
+  ##
+  ## - On Windows, the file position will always start at the beginning of the
+  ##   file if the file is seekable.
   initAsyncFileImpl()
 
 proc newAsyncFile*(fd: FD): ref AsyncFile =
@@ -127,6 +133,11 @@ proc newAsyncFile*(fd: FD): ref AsyncFile =
   ##
   ## **Note**: It is assumed that the file handle has been opened in
   ## asynchronous mode. Only use this interface if you know what you are doing.
+  ##
+  ## **Platform specific details**
+  ##
+  ## - On Windows, the file position will always start at the beginning of the
+  ##   file if the file is seekable.
   newAsyncFileImpl()
 
 func fd*(f: AnyFile): FD {.inline.} =
@@ -155,6 +166,8 @@ proc read*[T: byte or char](f: File, b: var openArray[T]): int
   ## If the file position is at the end-of-file, no data will be read and
   ## no error will be raised.
   ##
+  ## This function is not thread-safe.
+  ##
   ## Returns the number of bytes read from `f`.
   readImpl()
 
@@ -169,13 +182,53 @@ proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
   ## If the file position is at the end-of-file, no data will be read and
   ## no error will be raised.
   ##
+  ## This function is not thread-safe, and the ordering of two concurrent async
+  ## operations on the same file is undefined.
+  ##
   ## Returns the number of bytes read from `f`.
+  ##
+  ## **Platform specific details**
+  ##
+  ## - On Windows, for seekable files, the file position is implemented by the
+  ##   library and may overflow, though it is unlikely for that to happen due
+  ##   to most file system having a maximum file size of 2^64.
+  ##
+  ##   If you have to deal with file systems where the maximum file size
+  ##   exceeds that of conventional file systems, it is recommended to use
+  ##   `File` with threads for asynchronous operations.
+  ##
+  ## - On Windows, most disk IOs are not asynchronous, see this article_
+  ##   from Microsoft for more details. If asynchronous disk operations are
+  ##   required, it is recommended to use `File` with threads.
+  ##
+  ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
   asyncReadImpl()
 
 proc write*[T: byte or char](f: File, b: openArray[T]) {.raises: [IOError].} =
   ## Writes the contents of array `b` into file `f`.
+  ##
+  ## This function is not thread-safe.
   writeImpl()
 
 proc write*[T: string or seq[byte]](f: AsyncFile, b: T): Future[void] =
   ## Writes the contents of array `b` into file `f`.
+  ##
+  ## This function is not thread-safe, and the ordering of two concurrent async
+  ## operations on the same file is undefined.
+  ##
+  ## **Platform specific details**
+  ##
+  ## - On Windows, for seekable files, the file position is implemented by the
+  ##   library and may overflow, though it is unlikely for that to happen due
+  ##   to most file system having a maximum file size of 2^64.
+  ##
+  ##   If you have to deal with file systems where the maximum file size
+  ##   exceeds that of conventional file systems, it is recommended to use
+  ##   `File` with threads for asynchronous operations.
+  ##
+  ## - On Windows, most disk IOs are not asynchronous, see this article_
+  ##   from Microsoft for more details. If asynchronous disk operations are
+  ##   required, it is recommended to use `File` with threads.
+  ##
+  ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
   asyncWriteImpl()
