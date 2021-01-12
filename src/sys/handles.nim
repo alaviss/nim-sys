@@ -48,8 +48,12 @@ type
   AnyFD* = FD or SocketFD
     ## A typeclass representing any OS resource handles.
 
+  InvalidResourceHandle = distinct FD
+    ## The type of the invalid resource handle. This is a special type
+    ## just for InvalidFD usage.
+
 const
-  InvalidFD* = cast[FD](-1)
+  InvalidFD* = cast[InvalidResourceHandle](-1)
     ## An invalid resource handle.
 
 template raiseClosedHandleDefect*() =
@@ -66,13 +70,13 @@ func `==`*(a, b: FD): bool {.borrow.}
 func `==`*(a, b: SocketFD): bool {.borrow.}
   ## Equivalence operator for `SocketFD`
 
-proc isInvalidFD*(fd: AnyFD): bool {.inline.} =
-  ## Check if `fd` equals to `InvalidFD`.
-  # While no conversions are necessary for the case of FD, it is
-  # needed for SocketFD, so ignore the hint.
-  {.push hint[ConvFromXToItselfNotNeeded]: off.}
-  result = fd.FD == InvalidFD
-  {.pop.}
+func `==`*(a: AnyFD, b: typeof(InvalidFD)): bool {.inline.} =
+  ## Equivalence operator for comparing any file descriptor with `InvalidFD`.
+  a == (typeof a) b
+
+func `==`*(a: typeof(InvalidFD), b: AnyFD): bool {.inline.} =
+  ## Equivalence operator for comparing any file descriptor with `InvalidFD`.
+  b == a
 
 proc close*(fd: AnyFD) =
   ## Closes the resource handle `fd`.
@@ -131,7 +135,7 @@ proc close*[T: AnyFD](h: var Handle[T]) {.inline.} =
     close h.fd
   finally:
     # Always invalidate `h.fd` to avoid double-close on destruction.
-    h.fd = InvalidFD
+    h.fd = InvalidFD.T
 
 proc `=destroy`[T: AnyFD](h: var Handle[T]) {.inline.} =
   ## Destroy the file handle.
@@ -143,7 +147,7 @@ proc `=destroy`[T: AnyFD](h: var Handle[T]) {.inline.} =
     if not h.initialized:
       return
 
-  if not h.fd.isInvalidFD():
+  if h.fd != InvalidFD:
     close h
 
 proc `=copy`*[T: AnyFD](dest: var Handle[T], src: Handle[T]) {.error.}
@@ -181,4 +185,4 @@ proc take*[T: AnyFD](h: var Handle[T]): T {.inline.} =
   ## Returns the resource handle held by `h` and release ownership to the
   ## caller. `h` will then be invalidated.
   result = h.fd
-  h.fd = InvalidFD
+  h.fd = InvalidFD.T

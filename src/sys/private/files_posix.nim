@@ -13,11 +13,10 @@ type
     handle: Handle[FD]
 
 template cleanupFile(f: untyped) =
-  when f is AsyncFile or f is (ref AsyncFile):
-    if not f.toBaseFile.handle.get.isInvalidFD:
-      unregister f.toBaseFile.handle.get.AsyncFD
-  else:
-    discard "no special cleanup needed"
+  when f is AsyncFile:
+    # XXX: `!=` doesn't work here, probably a compiler bug
+    if not (f.File.handle.get == InvalidFD):
+      unregister f.File.handle.get.AsyncFD
 
 template closeImpl() {.dirty.} =
   cleanupFile f
@@ -44,7 +43,7 @@ template toBaseFile(f: untyped): untyped =
 
 template makeAsyncFile(T, result, fd, initFileProc: untyped) =
   result = T initFileProc(fd)
-  if not result.toBaseFile.handle.get.isInvalidFD:
+  if result.toBaseFile.handle.get != InvalidFD:
     register result.toBaseFile.handle.get.AsyncFD
 
 template initAsyncFileImpl() {.dirty.} =
