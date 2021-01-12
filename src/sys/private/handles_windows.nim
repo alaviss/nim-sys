@@ -12,9 +12,9 @@ type FDImpl = wincore.Handle
 
 template closeImpl() {.dirty.} =
   when fd is SocketFD:
-    closesocket fd.FDImpl
+    closesocket wincore.Handle(fd)
   else:
-    CloseHandle fd.FDImpl
+    CloseHandle wincore.Handle(fd)
 
 template setInheritableImpl() {.dirty.} =
   when fd is FD:
