@@ -7,7 +7,7 @@
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
 import std/strformat
-import syscall/winim/winim/core as wincore
+import syscall/winim/winim/core as wincore except Handle
 import errors
 
 const

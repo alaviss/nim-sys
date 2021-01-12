@@ -6,7 +6,7 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
-import syscall/winim/winim/core as wincore
+import syscall/winim/winim/core as wincore except Handle
 
 type FDImpl = wincore.Handle
 
