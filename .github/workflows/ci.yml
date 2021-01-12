@@ -54,7 +54,7 @@ jobs:
           EOF
 
       - name: Install 32bit MinGW (Windows-only)
-        if: matrix.arch == 'i386' && runner.os == 'Linux'
+        if: matrix.arch == 'i386' && runner.os == 'Windows'
         uses: egor-tensin/setup-mingw@v2
         with:
           platform: x86
