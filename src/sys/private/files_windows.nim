@@ -24,7 +24,7 @@ template cleanupFile(f: untyped) =
     unregister f.FileImpl.h.get
 
 template closeImpl() {.dirty.} =
-  cleanupFile()
+  cleanupFile f
   close f.File.handle
 
 template initFileImpl() {.dirty.} =
