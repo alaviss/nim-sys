@@ -65,7 +65,11 @@ template readImpl() {.dirty.} =
     result.inc bytesRead
 
     if success == 0:
-      raise newIOError(result, GetLastError(), ErrorRead)
+      let errorCode = GetLastError()
+      if errorCode == ErrorBrokenPipe:
+        discard "Treat a closed pipe as EOF"
+      else:
+        raise newIOError(result, errorCode, ErrorRead)
     elif bytesRead < high(DWORD):
       # As ReadFile() only return true when either EOF happened or all
       # requested bytes has been read, if the amount of bytes read did not

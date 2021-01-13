@@ -23,13 +23,29 @@ testes:
     var str = newString(10)
     check rd.read(str) == 0
 
+  test "AsyncPipe EOF read":
+    var (rd, wr) = newAsyncPipe()
+
+    close wr
+    var str = new string
+    str[] = newString(10)
+    check waitFor(rd.read str) == 0
+
   test "Pipe EOF write":
     var (rd, wr) = newPipe()
 
     close rd
     let data = "test data"
-    expect OSError:
+    expect IOError:
       wr.write(data)
+
+  test "AsyncPipe EOF write":
+    var (rd, wr) = newAsyncPipe()
+
+    close rd
+    let data = "test data"
+    expect IOError:
+      waitFor wr.write(data)
 
   test "Pipe read/write":
     proc writeWorker(wr: ptr File) {.thread.} =

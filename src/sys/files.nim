@@ -145,6 +145,9 @@ proc read*[T: byte or char](f: File, b: var openArray[T]): int
   ## If the file position is at the end-of-file, no data will be read and
   ## no error will be raised.
   ##
+  ## If `f` is a pipe and the write end has been closed, no data will be read
+  ## and no error will be raised.
+  ##
   ## This function is not thread-safe.
   ##
   ## Returns the number of bytes read from `f`.
@@ -160,6 +163,9 @@ proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
   ##
   ## If the file position is at the end-of-file, no data will be read and
   ## no error will be raised.
+  ##
+  ## If `f` is a pipe and the write end has been closed, no data will be read
+  ## and no error will be raised.
   ##
   ## This function is not thread-safe, and the ordering of two concurrent async
   ## operations on the same file is undefined.
