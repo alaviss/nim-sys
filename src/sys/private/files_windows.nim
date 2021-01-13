@@ -110,16 +110,18 @@ template asyncReadImpl() {.dirty.} =
       proc (fd: AsyncFD, bytesTransferred: DWORD, errcode: OSErrorCode) =
         if not future.finished:
           totalRead.inc bytesTransferred
+          if f.File.seekable:
+            f.File.pos.checkedInc bytesTransferred
 
-          if errcode.int == -1:
-            if f.File.seekable:
-              f.File.pos.checkedInc bytesTransferred
+          if errcode.int32 == -1i32:
             # As with the synchronous version, the operation might have been
             # broken down into smaller chunks. In that case it is called again
             # to read the rest of the requested bytes.
             if bytesTransferred == high(DWORD) and totalRead < b.len:
               doRead()
               return
+          elif errcode.int32 == ErrorBrokenPipe:
+            discard "Treat closed pipe as EOF"
           else:
             future.fail(newIOError(totalRead, errcode.int32, ErrorRead))
             return
@@ -143,7 +145,7 @@ template asyncReadImpl() {.dirty.} =
         # However the object will not be posted on IOCP if the operation fails,
         # so this extra reference has to be removed.
         GcUnref overlapped
-        if errorCode == ErrorHandleEof:
+        if errorCode == ErrorHandleEof or errorCode == ErrorBrokenPipe:
           # Do not raise any error on end-of-file
           future.complete(totalRead)
         else:
