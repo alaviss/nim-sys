@@ -67,7 +67,8 @@ template readImpl() {.dirty.} =
     if success == 0:
       let errorCode = GetLastError()
       if errorCode == ErrorBrokenPipe:
-        discard "Treat a closed pipe as EOF"
+        # Treat a closed pipe as EOF
+        break
       else:
         raise newIOError(result, errorCode, ErrorRead)
     elif bytesRead < high(DWORD):
