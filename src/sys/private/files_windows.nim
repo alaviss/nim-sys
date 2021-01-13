@@ -26,7 +26,7 @@ template cleanupFile(f: untyped) =
 
 template closeImpl() {.dirty.} =
   cleanupFile f
-  close f.File.handle
+  close f.handle
 
 template destroyFileImpl() {.dirty.} =
   cleanupFile f
@@ -46,11 +46,11 @@ template newAsyncFileImpl() {.dirty.} =
     register fd.AsyncFD
 
 template getFDImpl() {.dirty.} =
-  result = get f.File.handle
+  result = get f.handle
 
 template takeFDImpl() {.dirty.} =
   cleanupFile f
-  result = take f.File.handle
+  result = take f.handle
 
 template readImpl() {.dirty.} =
   while result < b.len:
@@ -135,7 +135,7 @@ template asyncReadImpl() {.dirty.} =
     # TODO: If an operation that can be completed immediately errors, would
     # it be possible that some bytes has been transferred? If so, can be
     # retrieve this number?
-    if ReadFile(wincore.Handle f.File.handle.get, addr b[totalRead], toRead,
+    if ReadFile(wincore.Handle f.handle.get, addr b[totalRead], toRead,
                 nil, cast[LPOverlapped](addr overlapped[])) == 0:
       let errorCode = GetLastError()
       if errorCode != ErrorIoPending:
@@ -217,7 +217,7 @@ template asyncWriteImpl() {.dirty.} =
 
     let toWrite = DWORD min(b.len - totalWritten, high DWORD)
     # TODO: see asyncReadImpl() for potential caveats.
-    if WriteFile(wincore.Handle f.File.handle.get, unsafeAddr b[totalWritten],
+    if WriteFile(wincore.Handle f.handle.get, unsafeAddr b[totalWritten],
                  toWrite, nil, cast[LPOverlapped](addr overlapped[])) == 0:
       let errorCode = GetLastError()
       if errorCode != ErrorIoPending:
