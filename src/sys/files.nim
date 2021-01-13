@@ -28,11 +28,15 @@ else:
   {.error: "This module has not been ported to your operating system.".}
 
 type
-  File* {.requiresInit.} = FileImpl
+  File* = ref FileImpl
     ## An object representing a file. This is an opaque object with
     ## differing implementations depending on the target operating system.
 
-  AsyncFile* {.borrow: `.`.} = distinct File
+  AsyncFileImpl {.borrow: `.`.} = distinct FileImpl
+    ## A distinct type derived from FileImpl so that we can assign a custom
+    ## destructor.
+
+  AsyncFile* = ref AsyncFileImpl
     ## The type used for files opened in asynchronous mode.
 
   AnyFile* = File or AsyncFile
@@ -82,23 +86,14 @@ when declared(destroyFileImpl):
     ## destructor as needed.
     destroyFileImpl()
 
-  proc `=destroy`(f: var AsyncFile) =
+  proc `=destroy`(f: var AsyncFileImpl) =
     ## Default destructor for all File-derived types.
     ##
     ## Exposing this allows OS-specific implementations to override the default
     ## destructor as needed.
     destroyFileImpl()
 
-proc initFile*(fd: FD): File =
-  ## Creates a new `File` object from an opened file handle.
-  ##
-  ## The ownership of the file handle will be transferred to the resulting
-  ## `File`.
-  ##
-  ## **Note**: Only use this interface if you know what you are doing.
-  initFileImpl()
-
-proc newFile*(fd: FD): ref File =
+proc newFile*(fd: FD): File =
   ## Creates a new `ref File` from an opened file handle.
   ##
   ## The ownership of the file handle will be transferred to the resulting
@@ -107,23 +102,7 @@ proc newFile*(fd: FD): ref File =
   ## **Note**: Only use this interface if you know what you are doing.
   newFileImpl()
 
-proc initAsyncFile*(fd: FD): AsyncFile =
-  ## Creates a new `AsyncFile` object from an opened file handle. `fd` will be
-  ## registered with the global dispatcher.
-  ##
-  ## The ownership of the file handle will be transferred to the resulting
-  ## `AsyncFile`.
-  ##
-  ## **Note**: It is assumed that the file handle has been opened in
-  ## asynchronous mode. Only use this interface if you know what you are doing.
-  ##
-  ## **Platform specific details**
-  ##
-  ## - On Windows, the file position will always start at the beginning of the
-  ##   file if the file is seekable.
-  initAsyncFileImpl()
-
-proc newAsyncFile*(fd: FD): ref AsyncFile =
+proc newAsyncFile*(fd: FD): AsyncFile =
   ## Creates a new `ref AsyncFile` object from an opened file handle.
   ##
   ## On POSIX systems, `fd` will be registered with the global dispatcher.
@@ -146,7 +125,7 @@ func fd*(f: AnyFile): FD {.inline.} =
   ## The returned `FD` will stay valid for the duration of `f`.
   getFDImpl()
 
-proc takeFD*(f: var AnyFile): FD {.inline.} =
+proc takeFD*(f: AnyFile): FD {.inline.} =
   ## Returns the file handle held by `f` and release ownership to the caller.
   ## `f` will then be invalidated.
   ##

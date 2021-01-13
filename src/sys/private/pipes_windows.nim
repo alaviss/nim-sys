@@ -8,6 +8,7 @@
 
 import std/strformat
 import syscall/winim/winim/core as wincore except Handle
+import ".." / handles
 import errors
 
 const
@@ -16,18 +17,15 @@ const
 
 template makePipe(p, inheritable, initFileProc: untyped) =
   var sa: SecurityAttributes
-  sa.nLength = sizeof(sa)
+  sa.nLength = DWORD sizeof(sa)
   sa.bInheritHandle = WinBool inheritable
 
   var rd, wr: wincore.Handle
-  if not CreatePipe(addr rd, addr wr, addr sa, BufferSize):
+  if CreatePipe(addr rd, addr wr, addr sa, BufferSize) == 0:
     raise newOSError(GetLastError(), ErrorPipeCreation)
 
-  p.rd = initFileProc(rd)
-  p.wr = initFileProc(wr)
-
-template initPipeImpl() {.dirty.} =
-  makePipe(result, ffInheritable in flags, initFile)
+  p.rd = initFileProc(FD rd)
+  p.wr = initFileProc(FD wr)
 
 template newPipeImpl() {.dirty.} =
   makePipe(result, ffInheritable in flags, newFile)
@@ -48,11 +46,11 @@ const
 
 proc generateUniquePipeName(): string =
   ## Generate a completely unique name for a pipe.
-  result = fmt"{NamedPipePrefix}.{getCurrentProcessID()}.{secureRandomUint()}"
+  result = fmt"{NamedPipePrefix}.{GetCurrentProcessID()}.{secureRandomUint()}"
 
 template makeAsyncPipe(p, inheritable, initFileProc: untyped) =
   var sa: SecurityAttributes
-  sa.nLength = sizeof(sa)
+  sa.nLength = DWORD sizeof(sa)
   sa.bInheritHandle = WinBool inheritable
 
   let
@@ -76,16 +74,14 @@ template makeAsyncPipe(p, inheritable, initFileProc: untyped) =
     raise newOSError(GetLastError(), ErrorPipeCreation)
 
   let wr = CreateFileA(pipeName, GenericWrite, dwShareMode = 0, addr sa,
-                       FileFlagOverlapped, nil)
+                       OpenExisting, FileFlagOverlapped,
+                       hTemplateFile = cast[wincore.Handle](nil))
 
   if wr == InvalidHandleValue:
     raise newOSError(GetLastError(), ErrorPipeCreation)
 
   p.rd = initFileProc(FD rd)
   p.wr = initFileProc(FD wr)
-
-template initAsyncPipeImpl() {.dirty.} =
-  makeAsyncPipe(result, ffInheritable in flags, initAsyncFile)
 
 template newAsyncPipeImpl() {.dirty.} =
   makeAsyncPipe(result, ffInheritable in flags, newAsyncFile)

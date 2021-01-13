@@ -7,6 +7,7 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
+from std/os import OSErrorCode
 import syscall/winim/winim/core as wincore except Handle
 
 type
@@ -16,46 +17,33 @@ type
     # Only used for async files
     case seekable: bool
     of true:
-      pos: BiggestUInt
+      pos: uint64
     of false: discard
 
 template cleanupFile(f: untyped) =
   when f is AsyncFile:
-    unregister f.FileImpl.h.get
+    unregister AsyncFD f.handle.get
 
 template closeImpl() {.dirty.} =
   cleanupFile f
   close f.File.handle
 
-template initFileImpl() {.dirty.} =
-  # Seekable is not used for synchronous operations
-  result = File(handle: initHandle(fd), seekable: false)
+template destroyFileImpl() {.dirty.} =
+  cleanupFile f
+  `=destroy` f.handle
 
 template newFileImpl() {.dirty.} =
   # Seekable is not used for synchronous operations
-  result = (ref File)(handle: initHandle(fd), seekable: false)
-
-template makeAsyncFile(T, fd: untyped) =
-  template toBaseFile(f: untyped): untyped =
-    ## Walkaround for nim-lang/Nim#16666
-    when f is ref and f is not File:
-      f[].File
-    elif f is not File:
-      f.File
-    else:
-      f
-
-  var result = T(handle: initHandle(fd),
-                 seekable: GetFileType(wincore.Handle fd) == FileTypeDisk)
-  if fd != InvalidFD:
-    register fd
-  result
-
-template initAsyncFileImpl() {.dirty.} =
-  result = makeSeekingFile(AsyncFile)
+  result = File(handle: initHandle(fd), seekable: false)
 
 template newAsyncFileImpl() {.dirty.} =
-  result = (ref AsyncFile) makeSeekingFile(FileImpl)
+  result = new AsyncFileImpl
+  result[] = AsyncFileImpl FileImpl(
+    handle: initHandle(fd),
+    seekable: GetFileType(wincore.Handle fd) == FileTypeDisk
+  )
+  if fd != InvalidFD:
+    register fd.AsyncFD
 
 template getFDImpl() {.dirty.} =
   result = get f.File.handle
@@ -76,7 +64,7 @@ template readImpl() {.dirty.} =
 
     result.inc bytesRead
 
-    if not success:
+    if success == 0:
       raise newIOError(result, GetLastError(), ErrorRead)
     elif bytesRead < high(DWORD):
       # As ReadFile() only return true when either EOF happened or all
@@ -91,14 +79,14 @@ func setPos(overlapped: CustomRef, pos: uint64) {.inline.} =
   overlapped.offset = DWORD(pos and high uint32)
   overlapped.offsetHigh = DWORD(pos shr 32)
 
-func checkedInc(u: var BiggestUInt, i: Natural) {.inline.} =
+func checkedInc(u: var uint64, i: Natural) {.inline.} =
   ## Increment `u` by `i`, raises `OverflowDefect` if `u` overflows.
   ##
   ## As it is made for safe file position increments, the message is
   ## personalized for that purpose.
   {.push checks: on.}
   let orig = u
-  u += i.BiggestUInt
+  u += i.uint64
   if u < orig:
     raise newException(OverflowDefect, "File position overflow")
   {.pop.}
@@ -112,13 +100,13 @@ template asyncReadImpl() {.dirty.} =
 
   proc doRead() =
     let overlapped = newCustom()
-    overlapped.data = CompletionData(fd: AsyncFD f.File.handle.get)
+    overlapped.data = CompletionData(fd: AsyncFD f.handle.get)
     overlapped.data.cb =
       proc (fd: AsyncFD, bytesTransferred: DWORD, errcode: OSErrorCode) =
         if not future.finished:
           totalRead.inc bytesTransferred
 
-          if errcode == OSErrorCode -1:
+          if errcode.int == -1:
             if f.File.seekable:
               f.File.pos.checkedInc bytesTransferred
             # As with the synchronous version, the operation might have been
@@ -128,7 +116,7 @@ template asyncReadImpl() {.dirty.} =
               doRead()
               return
           else:
-            future.fail(newIOError(totalRead, errcode, ErrorRead))
+            future.fail(newIOError(totalRead, errcode.int32, ErrorRead))
             return
 
           future.complete(totalRead)
@@ -140,8 +128,8 @@ template asyncReadImpl() {.dirty.} =
     # TODO: If an operation that can be completed immediately errors, would
     # it be possible that some bytes has been transferred? If so, can be
     # retrieve this number?
-    if not ReadFile(wincore.Handle f.File.handle.get, addr b[totalRead],
-                    toRead, nil, addr overlapped[]):
+    if ReadFile(wincore.Handle f.File.handle.get, addr b[totalRead], toRead,
+                nil, cast[LPOverlapped](addr overlapped[])) == 0:
       let errorCode = GetLastError()
       if errorCode != ErrorIoPending:
         # newCustom() add one reference on creation as the object
@@ -169,12 +157,13 @@ template writeImpl() {.dirty.} =
     var bytesWritten: DWORD
     let
       toWrite = DWORD min(b.len - totalWritten, high DWORD)
-      success = WriteFile(wincore.Handle f.handle.get, addr b[totalWritten],
-                          toWrite, addr bytesWritten, nil)
+      success = WriteFile(wincore.Handle f.handle.get,
+                          unsafeAddr b[totalWritten], toWrite,
+                          addr bytesWritten, nil)
 
     totalWritten.inc bytesWritten
 
-    if not success:
+    if success == 0:
       raise newIOError(totalWritten, GetLastError(), ErrorWrite)
     elif bytesWritten < high(DWORD):
       # See readImpl() for the rationale. Though, in the case of writes,
@@ -194,13 +183,13 @@ template asyncWriteImpl() {.dirty.} =
 
   proc doWrite() =
     let overlapped = newCustom()
-    overlapped.data = CompletionData(fd: AsyncFD f.File.handle.get)
+    overlapped.data = CompletionData(fd: AsyncFD f.handle.get)
     overlapped.data.cb =
       proc (fd: AsyncFD, bytesTransferred: DWORD, errcode: OSErrorCode) =
         if not future.finished:
           totalWritten.inc bytesTransferred
 
-          if errcode == OSErrorCode -1:
+          if errcode.int == -1:
             if f.File.seekable:
               f.File.pos.checkedInc bytesTransferred
 
@@ -211,23 +200,23 @@ template asyncWriteImpl() {.dirty.} =
 
             doAssert b.len == totalWritten, "not all of the provided buffer has been written"
           else:
-            future.fail(newIOError(totalWritten, errcode, ErrorWrite))
+            future.fail(newIOError(totalWritten, errcode.int32, ErrorWrite))
             return
 
-          future.complete(totalWritten)
+          future.complete()
 
     if f.File.seekable:
       overlapped.setPos f.File.pos
 
     let toWrite = DWORD min(b.len - totalWritten, high DWORD)
     # TODO: see asyncReadImpl() for potential caveats.
-    if not WriteFile(wincore.Handle f.File.handle.get, addr b[totalWritten],
-                     toWrite, nil, addr overlapped[]):
+    if WriteFile(wincore.Handle f.File.handle.get, unsafeAddr b[totalWritten],
+                 toWrite, nil, cast[LPOverlapped](addr overlapped[])) == 0:
       let errorCode = GetLastError()
       if errorCode != ErrorIoPending:
         GcUnref overlapped
         if errorCode == ErrorHandleEof:
-          future.complete(totalWritten)
+          future.complete()
         else:
           future.fail(newIOError(totalWritten, errorCode, ErrorWrite))
     else:

@@ -17,14 +17,14 @@ testes:
     signal(SIGPIPE, SIG_IGN)
 
   test "Pipe EOF read":
-    var (rd, wr) = initPipe()
+    var (rd, wr) = newPipe()
 
     close wr
     var str = newString(10)
     check rd.read(str) == 0
 
   test "Pipe EOF write":
-    var (rd, wr) = initPipe()
+    var (rd, wr) = newPipe()
 
     close rd
     let data = "test data"
@@ -35,9 +35,9 @@ testes:
     proc writeWorker(wr: ptr File) {.thread.} =
       {.gcsafe.}:
         wr.write TestBufferedData
-        close wr[]
+        close wr
 
-    var (rd, wr) = initPipe()
+    var (rd, wr) = newPipe()
     var thr: Thread[ptr File]
     thr.createThread(writeWorker, addr wr)
 
@@ -47,11 +47,12 @@ testes:
     joinThread thr
 
   test "AsyncPipe read/write":
-    var (rd, wr) = initAsyncPipe()
+    var (rd, wr) = newAsyncPipe()
 
     let wrFut = wr.write TestBufferedData
     wrFut.addCallback do:
-      close wr
+      {.gcsafe.}:
+        close wr
 
     let rdBuf = new string
     rdBuf[] = newString TestBufferedData.len
