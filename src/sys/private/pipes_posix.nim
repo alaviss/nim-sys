@@ -36,17 +36,9 @@ template commonInit(p, newFileProc: untyped, inheritable, blocking: bool) =
   p.rd = newFileProc(handles[0].FD)
   p.wr = newFileProc(handles[1].FD)
 
-template initPipeImpl() {.dirty.} =
-  commonInit(result, initFile,
-             inheritable = ffInheritable in flags, blocking = true)
-
 template newPipeImpl() {.dirty.} =
   commonInit(result, newFile,
              inheritable = ffInheritable in flags, blocking = true)
-
-template initAsyncPipeImpl() {.dirty.} =
-  commonInit(result, initAsyncFile,
-             inheritable = ffInheritable in flags, blocking = false)
 
 template newAsyncPipeImpl() {.dirty.} =
   commonInit(result, newAsyncFile,

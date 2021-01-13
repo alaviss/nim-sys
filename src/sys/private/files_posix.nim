@@ -9,55 +9,37 @@
 import syscall/posix
 
 type
-  FileImpl {.requiresInit.} = object
+  FileImpl = object
     handle: Handle[FD]
 
 template cleanupFile(f: untyped) =
   when f is AsyncFile:
     # XXX: `!=` doesn't work here, probably a compiler bug
-    if not (f.File.handle.get == InvalidFD):
-      unregister f.File.handle.get.AsyncFD
+    if not (f.handle.get == InvalidFD):
+      unregister AsyncFD f.handle.get
 
 template closeImpl() {.dirty.} =
   cleanupFile f
-  close f.toBaseFile.handle
+  close f.handle
 
 template destroyFileImpl() {.dirty.} =
   cleanupFile f
-  `=destroy` f.toBaseFile.handle
-
-template initFileImpl() {.dirty.} =
-  result = FileImpl(handle: initHandle(fd))
+  `=destroy` f.handle
 
 template newFileImpl() {.dirty.} =
-  result = (ref FileImpl)(handle: initHandle(fd))
-
-template toBaseFile(f: untyped): untyped =
-  ## Walkaround for nim-lang/Nim#16666
-  when f is ref and f is not File:
-    f[].File
-  elif f is not File:
-    f.File
-  else:
-    f
-
-template makeAsyncFile(T, result, fd, initFileProc: untyped) =
-  result = T initFileProc(fd)
-  if result.toBaseFile.handle.get != InvalidFD:
-    register result.toBaseFile.handle.get.AsyncFD
-
-template initAsyncFileImpl() {.dirty.} =
-  makeAsyncFile(AsyncFile, result, fd, initFile)
+  result = File(handle: initHandle(fd))
 
 template newAsyncFileImpl() {.dirty.} =
-  makeAsyncFile(ref AsyncFile, result, fd, newFile)
+  result = AsyncFile newFile(fd)
+  if result.handle.get != InvalidFD:
+    register result.handle.get.AsyncFD
 
 template getFDImpl() {.dirty.} =
-  result = get f.toBaseFile.handle
+  result = get f.handle
 
 template takeFDImpl() {.dirty.} =
   cleanupFile f
-  result = take f.toBaseFile.handle
+  result = take f.handle
 
 template readImpl() {.dirty.} =
   while result < b.len:
@@ -95,8 +77,8 @@ template asyncReadImpl() {.dirty.} =
     if not future.finished:
       future.complete totalRead
 
-  if not f.toBaseFile.handle.get.AsyncFD.doRead():
-    f.toBaseFile.handle.get.AsyncFD.addRead doRead
+  if not f.handle.get.AsyncFD.doRead():
+    f.handle.get.AsyncFD.addRead doRead
 
 template writeImpl() {.dirty.} =
   var totalWritten = 0
@@ -133,5 +115,5 @@ template asyncWriteImpl() {.dirty.} =
     if not future.finished:
       complete future
 
-  if not f.toBaseFile.handle.get.AsyncFD.doWrite():
-    f.toBaseFile.handle.get.AsyncFD.addWrite doWrite
+  if not f.handle.get.AsyncFD.doWrite():
+    f.handle.get.AsyncFD.addWrite doWrite

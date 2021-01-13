@@ -27,7 +27,7 @@ These stdlib modules are targeted for redesign/reimplementation (ordered by prio
 
 This package primarily targets the following operating systems:
 
-- Windows (not supported yet)
+- Windows
 - Linux
 - macOS
 
