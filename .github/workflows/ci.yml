@@ -58,6 +58,7 @@ jobs:
         uses: egor-tensin/setup-mingw@v2
         with:
           platform: x86
+          static: 0
 
       - name: Setup Nim
         uses: alaviss/setup-nim@0.1.1
