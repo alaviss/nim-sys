@@ -30,8 +30,10 @@ const
   ErrorSetBlocking {.used.} = "Could not change the resource handle blocking attribute"
     ## Error message used when setBlocking fails.
 
-  ErrorDuplicate = "Could not duplicate resource handle"
-    ## Error message used when duplicate fails.
+when false:
+  const
+    ErrorDuplicate = "Could not duplicate resource handle"
+      ## Error message used when duplicate fails.
 
 when defined(posix):
   include private/handles_posix
