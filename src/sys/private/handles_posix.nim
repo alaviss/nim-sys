@@ -16,7 +16,7 @@ template closeImpl() {.dirty.} =
   # The handle should be closed on any other error for most POSIX systems (sans
   # HP-UX, which leave the handle dangling on EINTR, but it's not supported
   # at the moment).
-  if close(fd.cint) == -1 and errno == EINVAL:
+  if close(fd.cint) == -1 and errno == EBADF:
     raiseClosedHandleDefect()
 
 template setInheritableImpl() {.dirty.} =

@@ -12,9 +12,15 @@ type FDImpl = wincore.Handle
 
 template closeImpl() {.dirty.} =
   when fd is SocketFD:
-    closesocket wincore.Handle(fd)
+    if closesocket(wincore.Handle fd) == SocketError:
+      let wsaError = WsaGetLastError()
+      if wsaError == WSAENOTSOCK or wsaError == WSAEBADF:
+        raiseClosedHandleDefect()
   else:
-    CloseHandle wincore.Handle(fd)
+    if CloseHandle(wincore.Handle fd) == 0:
+      let osError = GetLastError()
+      if osError == ErrorInvalidHandle:
+        raiseClosedHandleDefect()
 
 template setInheritableImpl() {.dirty.} =
   when fd is FD:
