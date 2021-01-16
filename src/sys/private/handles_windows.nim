@@ -17,6 +17,10 @@ template closeImpl() {.dirty.} =
       if wsaError == WSAENOTSOCK or wsaError == WSAEBADF:
         raiseClosedHandleDefect()
   else:
+    if fd == InvalidFD:
+      # Windows silently let InvalidFD pass and doesn't return any error.
+      # Raise it manually to be consistent with the POSIX implementation.
+      raiseClosedHandleDefect()
     if CloseHandle(wincore.Handle fd) == 0:
       let osError = GetLastError()
       if osError == ErrorInvalidHandle:
