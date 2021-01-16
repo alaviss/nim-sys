@@ -13,7 +13,7 @@ type
     handle: Handle[FD]
 
 template cleanupFile(f: untyped) =
-  when f is AsyncFile:
+  when f is AsyncFileImpl or f is AsyncFile:
     # XXX: `!=` doesn't work here, probably a compiler bug
     if not (f.handle.get == InvalidFD):
       unregister AsyncFD f.handle.get
