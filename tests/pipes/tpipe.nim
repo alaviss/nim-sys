@@ -37,7 +37,11 @@ testes:
     close rd
     let data = "test data"
     expect IOError:
-      wr.write(data)
+      try:
+        wr.write(data)
+      except IOError as e:
+        check e.bytesTransferred == 0
+        raise e # Reraise so expect can catch it
 
   test "AsyncPipe EOF write":
     var (rd, wr) = newAsyncPipe()
@@ -45,7 +49,11 @@ testes:
     close rd
     let data = "test data"
     expect IOError:
-      waitFor wr.write(data)
+      try:
+        waitFor wr.write(data)
+      except IOError as e:
+        check e.bytesTransferred == 0
+        raise e
 
   test "Pipe read/write":
     proc writeWorker(wr: ptr File) {.thread.} =
