@@ -1,6 +1,6 @@
 import system except File, IOError
 import std/[asyncdispatch, asyncfutures, strutils]
-import pkg/testes
+import pkg/balls
 import sys/[pipes, files, private/syscall/posix]
 
 {.experimental: "implicitDeref".}
@@ -11,7 +11,7 @@ let TestBufferedData = "!@#$%^TEST%$#@!\n".repeat(10_000_000)
   ##
   ## Declared as a `let` to avoid binary size being inflated by the inlining.
 
-testes:
+suite "Test Pipe read/write behaviors":
   when defined(posix):
     ## Disable SIGPIPE for EOF write tests
     signal(SIGPIPE, SIG_IGN)
