@@ -141,7 +141,7 @@ proc close*[T: AnyFD](h: var Handle[T]) {.inline.} =
     # Always invalidate `h.fd` to avoid double-close on destruction.
     h.fd = InvalidFD.T
 
-proc `=destroy`[T: AnyFD](h: var Handle[T]) {.inline.} =
+proc `=destroy`[T: AnyFD](h: var Handle[T]) =
   ## Destroy the file handle.
   when false:
     # TODO: Once nim-lang/Nim#16607 is fixed, make this into a debug check
