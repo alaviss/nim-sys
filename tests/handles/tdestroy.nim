@@ -67,13 +67,14 @@ suite "Test close() and Handle[T] destructions":
     check not wr.isValid
 
   test "Handle[T] is destroyed on collection":
+    when not defined(gcDestructors):
+      skip("Normal GCs are too picky on when to collect, making them untestable.")
+
     block:
       (rd, wr) = pipe()
       let
         hrd = newHandle(rd)
         hwr = newHandle(wr)
-    when declared(GC_fullCollect):
-      GC_fullCollect()
 
     check not rd.isValid
     check not wr.isValid
