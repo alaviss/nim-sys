@@ -10,6 +10,9 @@
 import std/posix as std_posix
 export std_posix
 
+# XXX: Remove when we fully replace std/posix
+{.used.}
+
 ## This module provides additional declaration not available in stdlib posix
 ## module.
 ##
