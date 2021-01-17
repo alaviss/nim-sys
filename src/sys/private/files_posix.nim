@@ -16,7 +16,8 @@ template cleanupFile(f: untyped) =
   when f is AsyncFileImpl or f is AsyncFile:
     # XXX: `!=` doesn't work here, probably a compiler bug
     if not (f.handle.get == InvalidFD):
-      unregister AsyncFD f.handle.get
+      # unregister AsyncFD f.handle.get
+      discard
 
 template closeImpl() {.dirty.} =
   cleanupFile f
@@ -32,7 +33,8 @@ template newFileImpl() {.dirty.} =
 template newAsyncFileImpl() {.dirty.} =
   result = AsyncFile newFile(fd)
   if result.handle.get != InvalidFD:
-    register result.handle.get.AsyncFD
+    # register result.handle.get.AsyncFD
+    discard
 
 template getFDImpl() {.dirty.} =
   result = get f.handle
@@ -41,7 +43,7 @@ template takeFDImpl() {.dirty.} =
   cleanupFile f
   result = take f.handle
 
-template readImpl() {.dirty.} =
+template readImpl(onNotReady: untyped) {.dirty.} =
   while result < b.len:
     let bytesRead = read(f.handle.get.cint, addr b[result],
                          b.len - result)
@@ -49,38 +51,54 @@ template readImpl() {.dirty.} =
       result.inc bytesRead
     elif bytesRead == 0:
       break
-    elif errno != EINTR and errno != EAGAIN:
+    elif errno == EINTR:
+      discard "Ignore signals for now"
+    elif errno == EAGAIN:
+      try:
+        onNotReady
+      except OSError as e:
+        raise newIOError(result, e.errorCode, e.msg)
+    else:
       raise newIOError(result, errno, ErrorRead)
 
-template asyncReadImpl() {.dirty.} =
-  assert b != nil, "The provided buffer is nil"
+template readImpl() {.dirty.} =
+  readImpl:
+    discard "Blocking read does not care about not ready files"
 
-  result = newFuture[int]("files.read")
+template cpsReadImpl() {.dirty.} =
+  readImpl:
+    wait(f.handle.get, {reRead})
 
-  let future = result
-  var totalRead = 0
+when false:
+  template asyncReadImpl() {.dirty.} =
+    assert b != nil, "The provided buffer is nil"
 
-  proc doRead(fd: AsyncFD): bool =
-    while totalRead < b.len:
-      let bytesRead = read(fd.cint, addr b[totalRead], b.len - totalRead)
-      if bytesRead > 0:
-        totalRead.inc bytesRead
-      elif bytesRead == 0:
-        break
-      elif errno == EAGAIN or errno == EINTR:
-        return false
-      else:
-        future.fail newIOError(totalRead, errno, ErrorRead)
-        break
+    result = newFuture[int]("files.read")
 
-    result = true
-    if not future.finished:
-      future.complete totalRead
+    let future = result
+    var totalRead = 0
 
-  if not f.handle.get.AsyncFD.doRead():
-    f.handle.get.AsyncFD.addRead doRead
+    proc doRead(fd: AsyncFD): bool =
+      while totalRead < b.len:
+        let bytesRead = read(fd.cint, addr b[totalRead], b.len - totalRead)
+        if bytesRead > 0:
+          totalRead.inc bytesRead
+        elif bytesRead == 0:
+          break
+        elif errno == EAGAIN or errno == EINTR:
+          return false
+        else:
+          future.fail newIOError(totalRead, errno, ErrorRead)
+          break
 
-template writeImpl() {.dirty.} =
+      result = true
+      if not future.finished:
+        future.complete totalRead
+
+    if not f.handle.get.AsyncFD.doRead():
+      f.handle.get.AsyncFD.addRead doRead
+
+template writeImpl(onNotReady: untyped) {.dirty.} =
   var totalWritten = 0
   while totalWritten < b.len:
     let bytesWritten = write(f.handle.get.cint, unsafeAddr b[totalWritten],
@@ -89,31 +107,47 @@ template writeImpl() {.dirty.} =
       totalWritten.inc bytesWritten
     elif bytesWritten == 0:
       doAssert false, "write() returned zero for non-zero request"
-    elif errno != EINTR and errno != EAGAIN:
+    elif errno == EINTR:
+      discard "Ignore signals for now"
+    elif errno == EAGAIN or errno == EWOULDBLOCK:
+      try:
+        onNotReady
+      except OSError as e:
+        raise newIOError(result, e.errorCode, e.msg)
+    else:
       raise newIOError(totalWritten, errno, ErrorWrite)
 
-template asyncWriteImpl() {.dirty.} =
-  result = newFuture[void]("files.write")
-  let future = result
-  var totalWritten = 0
+template writeImpl() {.dirty.} =
+  writeImpl:
+    discard "Blocking write does not care about not ready files"
 
-  proc doWrite(fd: AsyncFD): bool =
-    while totalWritten < b.len:
-      let bytesWritten = write(fd.cint, unsafeAddr b[totalWritten],
-                               b.len - totalWritten)
-      if bytesWritten > 0:
-        totalWritten.inc bytesWritten
-      elif bytesWritten == 0:
-        doAssert false, "write() returned zero for non-zero request"
-      elif errno == EAGAIN or errno == EINTR:
-        return false
-      else:
-        future.fail newIOError(totalWritten, errno, ErrorWrite)
-        break
+template cpsWriteImpl() {.dirty.} =
+  writeImpl:
+    wait(f.handle.get, {reWrite})
 
-    result = true
-    if not future.finished:
-      complete future
+when false:
+  template asyncWriteImpl() {.dirty.} =
+    result = newFuture[void]("files.write")
+    let future = result
+    var totalWritten = 0
 
-  if not f.handle.get.AsyncFD.doWrite():
-    f.handle.get.AsyncFD.addWrite doWrite
+    proc doWrite(fd: AsyncFD): bool =
+      while totalWritten < b.len:
+        let bytesWritten = write(fd.cint, unsafeAddr b[totalWritten],
+                                 b.len - totalWritten)
+        if bytesWritten > 0:
+          totalWritten.inc bytesWritten
+        elif bytesWritten == 0:
+          doAssert false, "write() returned zero for non-zero request"
+        elif errno == EAGAIN or errno == EINTR:
+          return false
+        else:
+          future.fail newIOError(totalWritten, errno, ErrorWrite)
+          break
+
+      result = true
+      if not future.finished:
+        complete future
+
+    if not f.handle.get.AsyncFD.doWrite():
+      f.handle.get.AsyncFD.addWrite doWrite

@@ -1,7 +1,7 @@
 import system except File, IOError
 import std/[asyncdispatch, asyncfutures, strutils]
 import pkg/balls
-import sys/[pipes, files, private/syscall/posix]
+import sys/[pipes, files, eventqueue, private/syscall/posix]
 
 {.experimental: "implicitDeref".}
 
@@ -27,9 +27,8 @@ suite "Test Pipe read/write behaviors":
     var (rd, wr) = newAsyncPipe()
 
     close wr
-    var str = new string
-    str[] = newString(10)
-    check waitFor(rd.read str) == 0
+    var str = newString(10)
+    rd.read str
 
   test "Pipe EOF write":
     var (rd, wr) = newPipe()

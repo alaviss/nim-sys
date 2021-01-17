@@ -10,7 +10,8 @@
 
 import system except io
 import std/asyncdispatch
-import handles
+import pkg/cps
+import handles, eventqueue
 import private/errors
 
 const
@@ -153,7 +154,12 @@ proc read*[T: byte or char](f: File, b: var openArray[T]): int
   ## Returns the number of bytes read from `f`.
   readImpl()
 
-proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
+when not declared(cpsReadImpl):
+  template cpsReadImpl() {.dirty.} =
+    {.error: "This operation is not available for your target platform".}
+
+proc read*[T: byte or char](f: AsyncFile, b: var openArray[T]): int
+                           {.cps: Cont, raises: [IOError].} =
   ## Reads `b.len` bytes from file `f` into `b`. Data may be written
   ## into `b` even when an error occurs. The IOError thrown will contain
   ## the number of bytes read thus far.
@@ -187,7 +193,44 @@ proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
   ##   required, it is recommended to use `File` with threads.
   ##
   ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
-  asyncReadImpl()
+  cpsReadImpl()
+
+when false:
+  proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
+    ## Reads `b.len` bytes from file `f` into `b`. Data may be written
+    ## into `b` even when an error occurs. The IOError thrown will contain
+    ## the number of bytes read thus far.
+    ##
+    ## This function will read until `b` is filled or the end-of-file has
+    ## been reached.
+    ##
+    ## If the file position is at the end-of-file, no data will be read and
+    ## no error will be raised.
+    ##
+    ## If `f` is a pipe and the write end has been closed, no data will be read
+    ## and no error will be raised.
+    ##
+    ## This function is not thread-safe, and the ordering of two concurrent async
+    ## operations on the same file is undefined.
+    ##
+    ## Returns the number of bytes read from `f`.
+    ##
+    ## **Platform specific details**
+    ##
+    ## - On Windows, for seekable files, the file position is implemented by the
+    ##   library and may overflow, though it is unlikely for that to happen due
+    ##   to most file system having a maximum file size of 2^64.
+    ##
+    ##   If you have to deal with file systems where the maximum file size
+    ##   exceeds that of conventional file systems, it is recommended to use
+    ##   `File` with threads for asynchronous operations.
+    ##
+    ## - On Windows, most disk IOs are not asynchronous, see this article_
+    ##   from Microsoft for more details. If asynchronous disk operations are
+    ##   required, it is recommended to use `File` with threads.
+    ##
+    ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
+    asyncReadImpl()
 
 proc write*[T: byte or char](f: File, b: openArray[T]) {.raises: [IOError].} =
   ## Writes the contents of array `b` into file `f`.
@@ -195,7 +238,8 @@ proc write*[T: byte or char](f: File, b: openArray[T]) {.raises: [IOError].} =
   ## This function is not thread-safe.
   writeImpl()
 
-proc write*[T: string or seq[byte]](f: AsyncFile, b: T): Future[void] =
+proc write*[T: byte or char](f: AsyncFile, b: openArray[T])
+                            {.cps: Cont, raises: [IOError].} =
   ## Writes the contents of array `b` into file `f`.
   ##
   ## This function is not thread-safe, and the ordering of two concurrent async
@@ -216,4 +260,28 @@ proc write*[T: string or seq[byte]](f: AsyncFile, b: T): Future[void] =
   ##   required, it is recommended to use `File` with threads.
   ##
   ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
-  asyncWriteImpl()
+  cpsWriteImpl()
+
+when false:
+  proc write*[T: string or seq[byte]](f: AsyncFile, b: T): Future[void] =
+    ## Writes the contents of array `b` into file `f`.
+    ##
+    ## This function is not thread-safe, and the ordering of two concurrent async
+    ## operations on the same file is undefined.
+    ##
+    ## **Platform specific details**
+    ##
+    ## - On Windows, for seekable files, the file position is implemented by the
+    ##   library and may overflow, though it is unlikely for that to happen due
+    ##   to most file system having a maximum file size of 2^64.
+    ##
+    ##   If you have to deal with file systems where the maximum file size
+    ##   exceeds that of conventional file systems, it is recommended to use
+    ##   `File` with threads for asynchronous operations.
+    ##
+    ## - On Windows, most disk IOs are not asynchronous, see this article_
+    ##   from Microsoft for more details. If asynchronous disk operations are
+    ##   required, it is recommended to use `File` with threads.
+    ##
+    ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
+    asyncWriteImpl()

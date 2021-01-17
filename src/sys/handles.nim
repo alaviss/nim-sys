@@ -49,8 +49,11 @@ type
   SocketFD* = distinct FD
     ## The type of the OS resource handle used for network sockets.
 
-  AnyFD* = FD or SocketFD
+  AnyFD* = concept fd
     ## A typeclass representing any OS resource handles.
+    FD(fd) is FD
+    (fd == fd) is bool
+    close(fd)
 
   InvalidResourceHandle = distinct FD
     ## The type of the invalid resource handle. This is a special type
@@ -76,20 +79,27 @@ func `==`*(a, b: SocketFD): bool {.borrow.}
 
 func `==`*(a: AnyFD, b: typeof(InvalidFD)): bool {.inline.} =
   ## Equivalence operator for comparing any file descriptor with `InvalidFD`.
-  a == (typeof a) b
+  a.FD == b.FD
 
 func `==`*(a: typeof(InvalidFD), b: AnyFD): bool {.inline.} =
   ## Equivalence operator for comparing any file descriptor with `InvalidFD`.
-  b == a
+  b.FD == a.FD
 
-proc close*(fd: AnyFD) =
+proc close*(fd: FD) =
   ## Closes the resource handle `fd`.
   ##
   ## If the passed resource handle is not valid, `ClosedHandleDefect` will be
   ## raised.
   closeImpl()
 
-proc setInheritable*(fd: AnyFD, inheritable: bool) =
+proc close*(fd: SocketFD) =
+  ## Closes the socket handle `fd`.
+  ##
+  ## If the passed socket handle is not valid, `ClosedHandleDefect` will be
+  ## raised.
+  closeImpl()
+
+proc setInheritable*(fd: FD, inheritable: bool) =
   ## Controls whether `fd` can be inherited by a child process.
   setInheritableImpl()
 
@@ -98,7 +108,7 @@ when not declared(setBlockingImpl):
   template setBlockingImpl() =
     {.error: "setBlocking is not available for your operating system".}
 
-proc setBlocking*(fd: AnyFD, blocking: bool) =
+proc setBlocking*(fd: FD, blocking: bool) =
   ## Controls the blocking state of `fd`, only available on POSIX systems.
   setBlockingImpl()
 
