@@ -9,7 +9,8 @@
 
 {.experimental: "implicitDeref".}
 
-from std / os import osErrorMsg, OSErrorCode
+from std/os import osErrorMsg, OSErrorCode
+from syscall/posix import errno
 
 template initOSError*(e: var OSError, errorCode: int32,
                       additionalInfo = "") =
