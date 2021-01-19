@@ -71,7 +71,7 @@ proc `=copy`*(dest: var FileImpl, src: FileImpl) {.error.}
   ## Copying a `File` is not allowed. If multiple references to the same file
   ## are wanted, consider using `ref File`.
 
-proc close*(f: var AnyFile) =
+proc close*(f: AnyFile) =
   ## Closes and invalidates the file `f`.
   ##
   ## If `f` is invalid, `ClosedHandleDefect` will be raised.
