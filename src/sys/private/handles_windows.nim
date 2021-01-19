@@ -29,7 +29,8 @@ template closeImpl() {.dirty.} =
 
 template setInheritableImpl() {.dirty.} =
   when fd is FD:
-    if not SetHandleInformation(FDImpl fd, HandleFlagInherit, 0):
+    if SetHandleInformation(FDImpl fd, HandleFlagInherit,
+                            DWORD inheritable) == 0:
       raise newOSError(GetLastError(), ErrorSetInheritable)
   else:
     {.error: "setInheritable is not available for this variant of FD".}

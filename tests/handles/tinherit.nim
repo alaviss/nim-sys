@@ -14,9 +14,14 @@ proc testInheritance(fd: FD, expected: bool) =
   let reference = duplicate fd
   defer:
     close reference
-  check execCmd(quoteShellCommand [
-    getAppFilename(), $expected, $cast[uint](fd), $cast[uint](reference)
-  ]) == 0
+  let p = startProcess(
+    getAppFilename(),
+    args = [$expected, $cast[uint](fd), $cast[uint](reference)],
+    options = {poParentStreams}
+  )
+  defer:
+    close p
+  check p.waitForExit() == 0
 
 proc runner() =
   suite "Test setInheritable":
@@ -50,10 +55,10 @@ proc inheritanceTester() =
       when not defined(windows):
         check fd.isValid() == expected
       else:
-        check CompareObjectHandles(
+        check (CompareObjectHandles(
           cast[winim.Handle](fd),
           cast[winim.Handle](reference)
-        ).bool == expected, "FD " & $cast[uint](fd) & " is " & inheritMsg
+        ) != 0) == expected, "FD " & $cast[uint](fd) & " is " & inheritMsg
 
 proc main() =
   if paramCount() == 0:
