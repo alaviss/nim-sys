@@ -38,3 +38,14 @@ proc isValid*(fd: FD): bool =
   else:
     var flags: DWORD
     GetHandleInformation(fd.Handle, addr flags) != 0
+
+proc duplicate*(fd: FD): FD =
+  when defined(posix):
+    result = FD dup(fd.cint)
+    doAssert result.cint != -1, "duplicating fd failed"
+  else:
+    let currentProcess = GetCurrentProcess()
+    doAssert DuplicateHandle(
+      currentProcess, fd.Handle, currentProcess, cast[ptr Handle](addr result),
+      dwDesiredAccess = 0, bInheritHandle = 1, DuplicateSameAccess
+    ) != 0, "duplicating fd failed"
