@@ -7,6 +7,7 @@
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
 import syscall/winim/winim/core as wincore except Handle
+import errors
 
 type FDImpl = wincore.Handle
 
@@ -28,7 +29,7 @@ template closeImpl() {.dirty.} =
 
 template setInheritableImpl() {.dirty.} =
   when fd is FD:
-    if not SetHandleInformation(fd.FDImpl, HandleFlagInherit, 0):
-      raise newOsError(GetLastError().int32, ErrorSetInheritable)
+    if not SetHandleInformation(FDImpl fd, HandleFlagInherit, 0):
+      raise newOSError(GetLastError(), ErrorSetInheritable)
   else:
     {.error: "setInheritable is not available for this variant of FD".}

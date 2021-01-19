@@ -4,7 +4,11 @@ import sys/handles
 import ".."/helpers/handles as helpers_handles
 
 when defined(windows):
-  import sys/private/winim/winim
+  import sys/private/syscall/winim/winim
+
+  proc CompareObjectHandles(hFirstObjectHandle,
+                            hSecondObjectHandle: winim.Handle): WinBool
+                           {.importc, stdcall, dynlib: "kernelbase.dll".}
 
 proc testInheritance(fd: FD, expected: bool) =
   let reference = duplicate fd
@@ -49,7 +53,7 @@ proc inheritanceTester() =
         check CompareObjectHandles(
           cast[winim.Handle](fd),
           cast[winim.Handle](reference)
-        ) == expected, "FD " & $cast[uint](fd) & " is " & inheritMsg
+        ).bool == expected, "FD " & $cast[uint](fd) & " is " & inheritMsg
 
 proc main() =
   if paramCount() == 0:
