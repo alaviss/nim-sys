@@ -35,14 +35,13 @@ proc runner() =
       testInheritance(rd, false)
       testInheritance(wr, false)
 
-
 proc inheritanceTester() =
   suite "Test inheritance":
     let
       expected = parseBool(paramStr 1)
       fd = cast[FD](parseBiggestUInt(paramStr 2))
       reference = cast[FD](parseBiggestUInt(paramStr 3))
-      inheritMsg = if expected: "inheritable" else: "not inheritable"
+      inheritMsg = if not expected: "inheritable" else: "not inheritable"
     test "Making sure that FD inheritability is correct":
       when not defined(windows):
         check fd.isValid() == expected
@@ -50,7 +49,7 @@ proc inheritanceTester() =
         check CompareObjectHandles(
           cast[winim.Handle](fd),
           cast[winim.Handle](reference)
-        ) == expected
+        ) == expected, "FD " & $cast[uint](fd) & " is " & inheritMsg
 
 proc main() =
   if paramCount() == 0:
