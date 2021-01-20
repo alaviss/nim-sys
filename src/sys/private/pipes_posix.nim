@@ -24,19 +24,19 @@ template newPipeImpl() {.dirty.} =
     setInheritable FD(handles[0]), inheritable
     setInheritable FD(handles[1]), inheritable
 
-  when Rd is AsyncFile:
+  when Rd is AsyncReadPipe:
     setBlocking FD(handles[0]), false
 
-  when Wr is AsyncFile:
+  when Wr is AsyncWritePipe:
     setBlocking FD(handles[1]), false
 
   result.rd =
-    when Rd is File:
-      newFile(FD handles[0])
+    when Rd is ReadPipe:
+      ReadPipe newFile(FD handles[0])
     else:
-      newAsyncFile(FD handles[0])
+      AsyncReadPipe newAsyncFile(FD handles[0])
   result.wr =
-    when Wr is File:
-      newFile(FD handles[1])
+    when Wr is WritePipe:
+      WritePipe newFile(FD handles[1])
     else:
-      newAsyncFile(FD handles[1])
+      AsyncWritePipe newAsyncFile(FD handles[1])

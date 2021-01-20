@@ -9,11 +9,34 @@
 ## Abstractions for operating system pipes and FIFOs (named pipes).
 
 import system except File
+import std/[asyncdispatch, typetraits]
 import files
 
 const
   ErrorPipeCreation = "Could not create pipe"
     ## Error message used when pipe creation fails.
+
+type
+  AsyncReadPipe* = distinct AsyncFile
+    ## The type used for the asynchronous read end of the pipe.
+
+  ReadPipe* = distinct File
+    ## The type used for the synchronous read end of the pipe.
+
+  AsyncWritePipe* = distinct AsyncFile
+    ## The type used for the asynchronous write end of the pipe.
+
+  WritePipe* = distinct File
+    ## The type used for the synchronous write end of the pipe.
+
+  AnyReadPipe* = AsyncReadPipe or ReadPipe
+    ## Typeclass for all `ReadPipe` variants.
+
+  AnyWritePipe* = AsyncWritePipe or WritePipe
+    ## Typeclass for all `WritePipe` variants.
+
+  AnyPipe* = AnyReadPipe or AnyWritePipe
+    ## Typeclass for all `Pipe` variants.
 
 when defined(posix):
   include private/pipes_posix
@@ -22,12 +45,13 @@ elif defined(windows):
 else:
   {.error: "This module has not been ported to your operating system.".}
 
-proc newPipe*(Rd: typedesc[AnyFile] = File, Wr: typedesc[AnyFile] = File,
+proc newPipe*(Rd: typedesc[AnyReadPipe] = ReadPipe,
+              Wr: typedesc[AnyWritePipe] = WritePipe,
               flags: set[FileFlag] = {}): tuple[rd: Rd, wr: Wr] =
   ## Creates a new anonymous pipe.
   ##
   ## Returns a tuple containing the read and write endpoints of the pipe. The
-  ## generic parameters `Rd` and `Wr` dictates the type of the endpoints.
+  ## generic parameters `Rd` and `Wr` dictate the type of the endpoints.
   ##
   ## For usage as standard input/output for child processes, it is recommended
   ## to use a synchronous pipe endpoint. The parent may use either an
@@ -58,7 +82,8 @@ proc newPipe*(Rd: typedesc[AnyFile] = File, Wr: typedesc[AnyFile] = File,
   ## .. _dangerous: https://devblogs.microsoft.com/oldnewthing/20121012-00/?p=6343
   newPipeImpl()
 
-proc newAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: AsyncFile]
+proc newAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd: AsyncReadPipe,
+                                                     wr: AsyncWritePipe]
                   {.inline.} =
   ## A shortcut for creating an anonymous pipe with both ends being
   ## asynchronous.
@@ -66,6 +91,64 @@ proc newAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: AsyncFile]
   ## Asynchronous pipe endpoints should only be passed to processes that are
   ## aware of them.
   ##
-  ## See `newPipe() <#newPipe,typedesc[AnyFile],typedesc[AnyFile],set[FileFlag]>`_
+  ## See
+  ## `newPipe() <#newPipe,typedesc[AnyReadPipe],typedesc[AnyWritePipe],set[FileFlag]>`_
   ## for more details.
-  newPipe(AsyncFile, AsyncFile, flags)
+  newPipe(AsyncReadPipe, AsyncWritePipe, flags)
+
+template close*(p: AnyPipe) =
+  ## Closes and invalidates the pipe endpoint `p`.
+  ##
+  ## This procedure is borrowed from
+  ## `files.close() <files.html#close,AnyFile>`_. See the borrowed symbol's
+  ## documentation for more details.
+  close distinctBase(typeof p) p
+
+template fd*(p: AnyPipe): FD =
+  ## Returns the file handle held by `p`.
+  ##
+  ## This procedure is borrowed from `files.fd() <files.html#fd,AnyFile>`_.
+  ## See the borrowed symbol's documentation for more details.
+  fd distinctBase(typeof p) p
+
+template takeFD*(p: AnyPipe): FD =
+  ## Returns the file handle held by `p` and release ownership to the caller.
+  ## `p` will then be invalidated.
+  ##
+  ## This procedure is borrowed from
+  ## `files.takeFD() <files.html#takeFD,AnyFile>`_. See the borrowed symbol's
+  ## documentation for more details.
+  takeFd distinctBase(typeof p) p
+
+template read*[T: byte or char](rp: ReadPipe, b: var openArray[T]): int =
+  ## Read `b.len` bytes from pipe `rp` into `b`.
+  ##
+  ## This procedure is borrowed from
+  ## `files.read() <files.html#read,File,openArray[T]>`_. See the borrowed
+  ## symbol's documentation for more details.
+  read distinctBase(typeof rp) rp, b
+
+template read*[T: string or seq[byte]](rp: AsyncReadPipe, b: ref T): Future[int] =
+  ## Read `b.len` bytes from pipe `rp` into `b`.
+  ##
+  ## This procedure is borrowed from
+  ## `files.read() <files.html#read,AsyncFile,ref.T>`_. See the borrowed
+  ## symbol's documentation for more details.
+  read distinctBase(typeof rp) rp, b
+
+template write*[T: byte or char](wp: WritePipe, b: openArray[T]) =
+  ## Writes the contents of array `b` into the pipe `wp`.
+  ##
+  ## This procedure is borrowed from
+  ## `files.write() <files.html#write,File,openArray[T]>`_. See the borrowed
+  ## symbol's documentation for more details.
+  write distinctBase(typeof wp) wp, b
+
+template write*[T: string or seq[byte]](wp: AsyncWritePipe,
+                                        b: T): Future[void] =
+  ## Writes the contents of array `b` into the pipe `wp`.
+  ##
+  ## This procedure is borrowed from
+  ## `files.write() <files.html#write,AsyncFile,T>`_. See the borrowed symbol's
+  ## documentation for more details.
+  write distinctBase(typeof wp) wp, b

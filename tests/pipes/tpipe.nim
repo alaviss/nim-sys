@@ -56,13 +56,13 @@ suite "Test Pipe read/write behaviors":
         raise e
 
   test "Pipe read/write":
-    proc writeWorker(wr: ptr File) {.thread.} =
+    proc writeWorker(wr: ptr WritePipe) {.thread.} =
       {.gcsafe.}:
         wr.write TestBufferedData
         close wr
 
     var (rd, wr) = newPipe()
-    var thr: Thread[ptr File]
+    var thr: Thread[ptr WritePipe]
     thr.createThread(writeWorker, addr wr)
 
     var rdBuf = newString TestBufferedData.len
@@ -85,28 +85,28 @@ suite "Test Pipe read/write behaviors":
     check wrFut.finished
 
   test "Sync read and async write test":
-    proc readWorker(rd: ptr File) {.thread.} =
+    proc readWorker(rd: ptr ReadPipe) {.thread.} =
       {.gcsafe.}:
         var rdBuf = newString TestBufferedData.len
         check rd.read(rdBuf) == rdBuf.len
         check rdBuf == TestBufferedData
         close rd
 
-    var (rd, wr) = newPipe(Wr = AsyncFile)
-    var thr: Thread[ptr File]
+    var (rd, wr) = newPipe(Wr = AsyncWritePipe)
+    var thr: Thread[ptr ReadPipe]
     thr.createThread(readWorker, addr rd)
 
     waitFor wr.write TestBufferedData
     joinThread thr
 
   test "Async read and sync write test":
-    proc writeWorker(wr: ptr File) {.thread.} =
+    proc writeWorker(wr: ptr WritePipe) {.thread.} =
       {.gcsafe.}:
         wr.write TestBufferedData
         close wr
 
-    var (rd, wr) = newPipe(Rd = AsyncFile)
-    var thr: Thread[ptr File]
+    var (rd, wr) = newPipe(Rd = AsyncReadPipe)
+    var thr: Thread[ptr WritePipe]
     thr.createThread(writeWorker, addr wr)
 
     let rdBuf = new string

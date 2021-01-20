@@ -38,19 +38,19 @@ template newPipeImpl() {.dirty.} =
   sa.nLength = DWORD sizeof(sa)
   sa.bInheritHandle = WinBool(ffInheritable in flags)
 
-  when Rd is File and Wr is File:
+  when Rd is ReadPipe and Wr is WritePipe:
     var rd, wr: wincore.Handle
     if CreatePipe(addr rd, addr wr, addr sa, BufferSize) == 0:
       raise newOSError(GetLastError(), ErrorPipeCreation)
   else:
     let
       rdExtraFlags: DWORD =
-        when Rd is AsyncFile:
+        when Rd is AsyncReadPipe:
           FileFlagOverlapped
         else:
           0
       wrExtraFlags: DWORD =
-        when Wr is AsyncFile:
+        when Wr is AsyncWritePipe:
           FileFlagOverlapped
         else:
           0
@@ -82,12 +82,12 @@ template newPipeImpl() {.dirty.} =
       raise newOSError(GetLastError(), ErrorPipeCreation)
 
   result.rd =
-    when Rd is File:
-      newFile(FD rd)
+    when Rd is ReadPipe:
+      ReadPipe newFile(FD rd)
     else:
-      newAsyncFile(FD rd)
+      AsyncReadPipe newAsyncFile(FD rd)
   result.wr =
-    when Wr is File:
-      newFile(FD wr)
+    when Wr is WritePipe:
+      WritePipe newFile(FD wr)
     else:
-      newAsyncFile(FD wr)
+      AsyncWritePipe newAsyncFile(FD wr)
