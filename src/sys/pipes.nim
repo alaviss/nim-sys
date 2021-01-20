@@ -22,24 +22,19 @@ elif defined(windows):
 else:
   {.error: "This module has not been ported to your operating system.".}
 
-proc newPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: File] =
-  ## Creates a new anonymous pipe as references.
+proc newPipe*(Rd: typedesc[AnyFile] = File, Wr: typedesc[AnyFile] = File,
+              flags: set[FileFlag] = {}): tuple[rd: Rd, wr: Wr] =
+  ## Creates a new anonymous pipe.
   ##
-  ## Returns a tuple containing the read and write endpoints of the pipe.
+  ## Returns a tuple containing the read and write endpoints of the pipe. The
+  ## generic parameters `Rd` and `Wr` dictates the type of the endpoints.
+  ##
+  ## For usage as standard input/output for child processes, it is recommended
+  ## to use a synchronous pipe endpoint. The parent may use either an
+  ## asynchronous or synchronous endpoint at their discretion. See the section
+  ## below for more details.
   ##
   ## Only the flag `ffInheritable` is supported.
-  newPipeImpl()
-
-proc newAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: AsyncFile] =
-  ## Creates a new asynchrounous anonymous pipe as references.
-  ##
-  ## Returns a tuple containing the read and write endpoints of the pipe.
-  ##
-  ## Only the flag `ffInheritable` is supported.
-  ##
-  ## **Note**: The returned handles are not recommended for use as standard
-  ## input, output or error for child processes. See the following section
-  ## for more details.
   ##
   ## **Platform specific details**
   ##
@@ -48,15 +43,29 @@ proc newAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: AsyncFile] =
   ##   handle is always the client. The server-client distinction doesn't
   ##   matter for most usage, however.
   ##
-  ## - On Windows, the handles are created with `FILE_FLAG_OVERLAPPED` set,
-  ##   which require "overlapped" operations to be done on them (it is possible
-  ##   to perform "non-overlapped" I/O on them, but it is dangerous_).
-  ##   Passing them to a process not expecting asynchronous I/O is
-  ##   discouraged.
+  ## - On Windows, the asynchronous handles are created with
+  ##   `FILE_FLAG_OVERLAPPED` set, which require "overlapped" operations to be
+  ##   done on them (it is possible to perform "non-overlapped" I/O on them,
+  ##   but it is dangerous_). Passing them to a process not expecting
+  ##   asynchronous I/O is discouraged.
   ##
-  ## - On POSIX, the handles can be used synchronously for correctly written
-  ##   programs, at the cost of multiple syscalls instead of a single blocking
-  ##   syscall.
+  ## - On POSIX, while the asynchronous handles can always be used
+  ##   synchronously in certain programs (ie. by loop on `EAGAIN`), it is
+  ##   at the cost of multiple syscalls instead of one single blocking syscall.
+  ##   Passing them to a process not expecting asynchronous I/O will result in
+  ##   reduced performance.
   ##
   ## .. _dangerous: https://devblogs.microsoft.com/oldnewthing/20121012-00/?p=6343
-  newAsyncPipeImpl()
+  newPipeImpl()
+
+proc newAsyncPipe*(flags: set[FileFlag] = {}): tuple[rd, wr: AsyncFile]
+                  {.inline.} =
+  ## A shortcut for creating an anonymous pipe with both ends being
+  ## asynchronous.
+  ##
+  ## Asynchronous pipe endpoints should only be passed to processes that are
+  ## aware of them.
+  ##
+  ## See `newPipe() <#newPipe,typedesc[AnyFile],typedesc[AnyFile],set[FileFlag]>`_
+  ## for more details.
+  newPipe(AsyncFile, AsyncFile, flags)

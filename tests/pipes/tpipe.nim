@@ -17,14 +17,14 @@ suite "Test Pipe read/write behaviors":
     signal(SIGPIPE, SIG_IGN)
 
   test "Pipe EOF read":
-    var (rd, wr) = newPipe()
+    let (rd, wr) = newPipe()
 
     close wr
     var str = newString(10)
     check rd.read(str) == 0
 
   test "AsyncPipe EOF read":
-    var (rd, wr) = newAsyncPipe()
+    let (rd, wr) = newAsyncPipe()
 
     close wr
     var str = new string
@@ -32,7 +32,7 @@ suite "Test Pipe read/write behaviors":
     check waitFor(rd.read str) == 0
 
   test "Pipe EOF write":
-    var (rd, wr) = newPipe()
+    let (rd, wr) = newPipe()
 
     close rd
     let data = "test data"
@@ -44,7 +44,7 @@ suite "Test Pipe read/write behaviors":
         raise e # Reraise so expect can catch it
 
   test "AsyncPipe EOF write":
-    var (rd, wr) = newAsyncPipe()
+    let (rd, wr) = newAsyncPipe()
 
     close rd
     let data = "test data"
@@ -71,7 +71,7 @@ suite "Test Pipe read/write behaviors":
     joinThread thr
 
   test "AsyncPipe read/write":
-    var (rd, wr) = newAsyncPipe()
+    let (rd, wr) = newAsyncPipe()
 
     let wrFut = wr.write TestBufferedData
     wrFut.addCallback do:
@@ -83,3 +83,34 @@ suite "Test Pipe read/write behaviors":
     check waitFor(rd.read rdBuf) == rdBuf.len
     check rdBuf[] == TestBufferedData
     check wrFut.finished
+
+  test "Sync read and async write test":
+    proc readWorker(rd: ptr File) {.thread.} =
+      {.gcsafe.}:
+        var rdBuf = newString TestBufferedData.len
+        check rd.read(rdBuf) == rdBuf.len
+        check rdBuf == TestBufferedData
+        close rd
+
+    var (rd, wr) = newPipe(Wr = AsyncFile)
+    var thr: Thread[ptr File]
+    thr.createThread(readWorker, addr rd)
+
+    waitFor wr.write TestBufferedData
+    joinThread thr
+
+  test "Async read and sync write test":
+    proc writeWorker(wr: ptr File) {.thread.} =
+      {.gcsafe.}:
+        wr.write TestBufferedData
+        close wr
+
+    var (rd, wr) = newPipe(Rd = AsyncFile)
+    var thr: Thread[ptr File]
+    thr.createThread(writeWorker, addr wr)
+
+    let rdBuf = new string
+    rdBuf[] = newString TestBufferedData.len
+    check waitFor(rd.read rdBuf) == rdBuf.len
+    check rdBuf[] == TestBufferedData
+    joinThread thr

@@ -9,37 +9,34 @@
 import syscall/posix
 import errors, ".." / handles
 
-template commonInit(p, newFileProc: untyped, inheritable, blocking: bool) =
-  ## Common implementation for init*Pipe(). Assumes that `p` is empty.
+template newPipeImpl() {.dirty.} =
   var handles: array[2, cint]
+  let inheritable = ffInheritable in flags
   when declared(pipe2):
     var flags = 0.cint
     if not inheritable:
       flags = flags or O_CLOEXEC
-    if not blocking:
-      flags = flags or O_NONBLOCK
 
     posixChk pipe2(handles, flags), ErrorPipeCreation
   else:
     posixChk pipe(handles), ErrorPipeCreation
 
-    template setFlags(fd: untyped) =
-      if not inheritable:
-        fd.setInheritable(inheritable)
+    setInheritable FD(handles[0]), inheritable
+    setInheritable FD(handles[1]), inheritable
 
-      if not blocking:
-        fd.setBlocking(blocking)
+  when Rd is AsyncFile:
+    setBlocking FD(handles[0]), false
 
-    setFlags(handles[0].FD)
-    setFlags(handles[1].FD)
+  when Wr is AsyncFile:
+    setBlocking FD(handles[1]), false
 
-  p.rd = newFileProc(handles[0].FD)
-  p.wr = newFileProc(handles[1].FD)
-
-template newPipeImpl() {.dirty.} =
-  commonInit(result, newFile,
-             inheritable = ffInheritable in flags, blocking = true)
-
-template newAsyncPipeImpl() {.dirty.} =
-  commonInit(result, newAsyncFile,
-             inheritable = ffInheritable in flags, blocking = false)
+  result.rd =
+    when Rd is File:
+      newFile(FD handles[0])
+    else:
+      newAsyncFile(FD handles[0])
+  result.wr =
+    when Wr is File:
+      newFile(FD handles[1])
+    else:
+      newAsyncFile(FD handles[1])
