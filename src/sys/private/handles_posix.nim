@@ -6,7 +6,7 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
-import errors, syscall/posix
+import errors, signalsafe_posix, syscall/posix
 
 type
   FDImpl = cint
@@ -26,13 +26,8 @@ template setInheritableImpl() {.dirty.} =
     else:
       posixChk ioctl(fd.cint, FIOCLEX), ErrorSetInheritable
   else:
-    var fdFlags = fcntl(fd.cint, F_GETFD)
-    posixChk fdFlags, ErrorSetInheritable
-    if inheritable:
-      fdFlags = fdFlags and not FD_CLOEXEC
-    else:
-      fdFlags = fdFlags or FD_CLOEXEC
-    posixChk fcntl(fd.cint, F_SETFD, fdFlags), ErrorSetInheritable
+    if not signalsafe_posix.setInheritable(fd.cint, inheritable):
+      posixChk -1, ErrorSetInheritable
 
 template setBlockingImpl() {.dirty.} =
   var flags = fcntl(fd.cint, F_GETFL)

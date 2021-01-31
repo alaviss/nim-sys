@@ -27,3 +27,12 @@ when defined(bsd) or defined(linux):
   proc dup3*(oldfd, newfd, flags: cint): cint {.importc, header: "<unistd.h>".}
   proc pipe2*(pipefd: var array[2, cint],
               flags: cint): cint {.importc, header: "<unistd.h>".}
+
+when defined(linux):
+  const
+    CLONE_VM* = 0x100
+    CLONE_VFORK* = 0x4000
+
+  proc clone*(fn: proc (arg: pointer): cint {.cdecl.}, stack: pointer,
+              flags: cint, arg: pointer): cint
+             {.varargs, importc, header: "<sched.h>".}
