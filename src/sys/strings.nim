@@ -47,7 +47,7 @@ template `[]`*(w: Without, i: Natural): char =
   w.string[i]
 
 template `[]`*(w: Without, i: BackwardsIndex): char =
-  ## Obtain the byte at position `i` of the string `w`.
+  ## Obtain the byte at position `w.len - i` of the string `w`.
   w.string[i]
 
 func `[]=`*[C](w: var Without[C], i: Natural, c: char)
@@ -62,8 +62,9 @@ func `[]=`*[C](w: var Without[C], i: Natural, c: char)
 
 func toWithout*(s: sink string, C: static set[char]): Without[C]
                {.inline, raises: [ValueError].} =
-  ## Checked conversion to `Without[C]`, raises `ValueError` if any character
-  ## in `C` was found in the string.
+  ## Checked conversion to `Without[C]`.
+  ##
+  ## Raises `ValueError` if any character in `C` was found in the string.
   let invalidPos = s.find C
   if invalidPos != -1:
     raise newException(
