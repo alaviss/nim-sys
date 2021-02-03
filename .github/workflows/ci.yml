@@ -78,11 +78,13 @@ jobs:
         run: |
           branch=${{ github.ref }}
           branch=${branch##*/}
-          nimble doc --project --outdir:htmldocs \
-            '--git.url:https://github.com/${{ github.repository }}' \
-            '--git.commit:${{ github.sha }}' \
-            "--git.devel:$branch" \
-            src/sys/*.nim
+          for i in src/sys/*.nim; do
+            nimble doc --project --outdir:htmldocs \
+              '--git.url:https://github.com/${{ github.repository }}' \
+              '--git.commit:${{ github.sha }}' \
+              "--git.devel:$branch" \
+              "$i"
+          done
           # Ignore failures for older Nim
           cp htmldocs/{the,}index.html || true
 
