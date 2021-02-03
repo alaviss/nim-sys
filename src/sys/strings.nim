@@ -73,6 +73,19 @@ func toWithout*(s: sink string, C: static set[char]): Without[C]
     )
   result = Without[C](s)
 
+func toWithout*[A](w: sink Without[A], C: static set[char]): Without[C]
+               {.inline, raises: [ValueError].} =
+  ## Convert between `Without` types.
+  ##
+  ## Raises `ValueError` if any character in `C` was found in the string.
+  ##
+  ## When `A` is equal to `C`, `w` will be returned and no check occurs. This
+  ## makes it useful for use in generics.
+  when A == C:
+    w
+  else:
+    w.string.toWithout(C)
+
 func filter*(s: string, C: static set[char]): Without[C] {.raises: [].} =
   ## Remove characters in set `C` from `s` and create a `Without[C]`.
   var i = 0
@@ -82,6 +95,17 @@ func filter*(s: string, C: static set[char]): Without[C] {.raises: [].} =
       result.string.delete(i, i)
     else:
       inc i
+
+func filter*[A](w: Without[A], C: static set[char]): Without[C]
+               {.raises: [].} =
+  ## Remove characters in set `C` from `w` and create a `Without[C]`.
+  ##
+  ## When `A` is equal to `C`, `w` will be returned. This makes it useful for
+  ## use in generics.
+  when A == C:
+    w
+  else:
+    w.string.filter(C)
 
 template add*[C](w: var Without[C], s: Without[C]) =
   ## Append the string `s` to `w`.
@@ -121,3 +145,8 @@ func toNulless*(s: sink string): Nulless
   ##
   ## Raises `ValueError` if any NUL character was found in the string.
   s.toWithout({'\0'})
+
+func toNulless*(s: sink Nulless): Nulless
+               {.inline, raises: [].} =
+  ## Returns `s`. This function is provided for use in generics.
+  s

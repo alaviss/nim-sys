@@ -64,3 +64,24 @@ suite "Nulless tests":
     expect ValueError:
       sample.add "-\0less"
     check sample == "NUL"
+
+  test "filter() to the same type doesn't change anything":
+    let sample = "NUL-less".toNulless
+    check sample.filter({'\0'}) == sample
+
+  test "filter() works cross type":
+    let sample = "ab\0c".toWithout({'$'})
+    check sample.filter({'\0'}) == "abc".toNulless
+
+  test "toWithout() to the same type have no effect":
+    let sample = "NUL-less".toNulless
+    check sample.toWithout({'\0'}) == sample
+
+  test "toWithout() captures error cross-type":
+    let sample = "NUL-less".toNulless
+    expect ValueError:
+      discard sample.toWithout({'N', 'U', 'L'})
+
+  test "toNulless() is a no-op when used on Nulless":
+    let sample = "NUL-less".toNulless
+    check sample.toNulless == sample
