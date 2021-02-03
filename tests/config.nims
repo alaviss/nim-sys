@@ -1,3 +1,3 @@
 switch("path", "$projectDir/../../src")
-switch("styleCheck", "error")
+switch("styleCheck", "hint")
 switch("experimental", "strictFuncs")
