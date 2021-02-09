@@ -26,29 +26,10 @@ const
   FoundInvalid = "Invalid character ($1) found at position $2"
     # Error message used when an invalid character is found during search.
 
-template len*(w: Without): int =
-  ## Obtain the length of the string `w`.
-  w.string.len
-
-template `==`*(a, b: Without): bool =
-  ## Returns whether `a` and `b` are equal.
-  a.string == b.string
-
-template `==`*(a: Without, b: string): bool =
-  ## Returns whether `a` and `b` are equal.
-  a.string == b
-
-template `==`*(a: string, b: Without): bool =
-  ## Returns whether `a` and `b` are equal.
-  a == b.string
-
-template `[]`*(w: Without, i: Natural): char =
-  ## Obtain the byte at position `i` of the string `w`.
-  w.string[i]
-
-template `[]`*(w: Without, i: BackwardsIndex): char =
-  ## Obtain the byte at position `w.len - i` of the string `w`.
-  w.string[i]
+converter toString*(w: Without): lent string =
+  ## Read-only converter from any `Without` type to a string. This enables
+  ## drop-in compatibility with non-mutating operations on a string.
+  w.string
 
 func `[]=`*[C](w: var Without[C], i: Natural, c: char)
               {.inline, raises: [ValueError].} =
