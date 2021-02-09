@@ -1,0 +1,16 @@
+AsyncReadPipe	pipes.html#AsyncReadPipe	pipes: AsyncReadPipe	
+ReadPipe	pipes.html#ReadPipe	pipes: ReadPipe	
+AsyncWritePipe	pipes.html#AsyncWritePipe	pipes: AsyncWritePipe	
+WritePipe	pipes.html#WritePipe	pipes: WritePipe	
+AnyReadPipe	pipes.html#AnyReadPipe	pipes: AnyReadPipe	
+AnyWritePipe	pipes.html#AnyWritePipe	pipes: AnyWritePipe	
+AnyPipe	pipes.html#AnyPipe	pipes: AnyPipe	
+newPipe	pipes.html#newPipe,typedesc[AnyReadPipe],typedesc[AnyWritePipe],set[FileFlag]	pipes: newPipe(Rd: typedesc[AnyReadPipe] = ReadPipe;\n        Wr: typedesc[AnyWritePipe] = WritePipe; flags: set[FileFlag] = {}): tuple[\n    rd: Rd:type, wr: Wr:type]	
+newAsyncPipe	pipes.html#newAsyncPipe,set[FileFlag]	pipes: newAsyncPipe(flags: set[FileFlag] = {}): tuple[rd: AsyncReadPipe,\n    wr: AsyncWritePipe]	
+close	pipes.html#close.t,AnyPipe	pipes: close(p: AnyPipe)	
+fd	pipes.html#fd.t,AnyPipe	pipes: fd(p: AnyPipe): FD	
+takeFD	pipes.html#takeFD.t,AnyPipe	pipes: takeFD(p: AnyPipe): FD	
+read	pipes.html#read.t,ReadPipe,openArray[T]	pipes: read[T](rp: ReadPipe; b: var openArray[T]): int	
+read	pipes.html#read.t,AsyncReadPipe,ref.T	pipes: read[T](rp: AsyncReadPipe; b: ref T): Future[int]	
+write	pipes.html#write.t,WritePipe,openArray[T]	pipes: write[T](wp: WritePipe; b: openArray[T])	
+write	pipes.html#write.t,AsyncWritePipe,T	pipes: write[T](wp: AsyncWritePipe; b: T): Future[void]	

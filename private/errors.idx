@@ -1,0 +1,3 @@
+initOSError	private/errors.html#initOSError.t,OSError,int32,string	errors: initOSError(e: var OSError; errorCode: int32; additionalInfo = &quot;&quot;)	
+newOSError	private/errors.html#newOSError,int32,string	errors: newOSError(errorCode: int32; additionalInfo = &quot;&quot;): ref OSError	
+posixChk	private/errors.html#posixChk.t,untyped,string	errors: posixChk(op: untyped; errmsg: string = &quot;&quot;): untyped	

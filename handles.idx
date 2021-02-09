@@ -1,0 +1,19 @@
+FD	handles.html#FD	handles: FD	
+SocketFD	handles.html#SocketFD	handles: SocketFD	
+AnyFD	handles.html#AnyFD	handles: AnyFD	
+InvalidFD	handles.html#InvalidFD	handles: InvalidFD	
+raiseClosedHandleDefect	handles.html#raiseClosedHandleDefect.t	handles: raiseClosedHandleDefect()	
+`==`	handles.html#==,FD,FD	handles: `==`(a, b: FD): bool	
+`==`	handles.html#==,SocketFD,SocketFD	handles: `==`(a, b: SocketFD): bool	
+`==`	handles.html#==,AnyFD,	handles: `==`(a: AnyFD; b: typeof(InvalidFD)): bool	
+`==`	handles.html#==,,AnyFD	handles: `==`(a: typeof(InvalidFD); b: AnyFD): bool	
+close	handles.html#close,AnyFD	handles: close(fd: AnyFD)	
+setInheritable	handles.html#setInheritable,AnyFD,bool	handles: setInheritable(fd: AnyFD; inheritable: bool)	
+setBlocking	handles.html#setBlocking,AnyFD,bool	handles: setBlocking(fd: AnyFD; blocking: bool)	
+Handle	handles.html#Handle	handles: Handle	
+close	handles.html#close,Handle[T: AnyFD]	handles: close[T: AnyFD](h: var Handle[T])	
+`=copy`	handles.html#=copy,Handle[T: AnyFD],Handle[T: AnyFD]	handles: `=copy`[T: AnyFD](dest: var Handle[T]; src: Handle[T])	
+initHandle	handles.html#initHandle,T	handles: initHandle[T: AnyFD](fd: T): Handle[T]	
+newHandle	handles.html#newHandle,T	handles: newHandle[T: AnyFD](fd: T): ref Handle[T]	
+get	handles.html#get,Handle[T: AnyFD]	handles: get[T: AnyFD](h: Handle[T]): T	
+take	handles.html#take,Handle[T: AnyFD]	handles: take[T: AnyFD](h: var Handle[T]): T	

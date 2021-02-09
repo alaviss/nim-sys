@@ -1,0 +1,22 @@
+File	files.html#File	files: File	
+AsyncFile	files.html#AsyncFile	files: AsyncFile	
+AnyFile	files.html#AnyFile	files: AnyFile	
+ffRead	files.html#ffRead	FileFlag.ffRead	
+ffWrite	files.html#ffWrite	FileFlag.ffWrite	
+ffAppend	files.html#ffAppend	FileFlag.ffAppend	
+ffTruncate	files.html#ffTruncate	FileFlag.ffTruncate	
+ffInheritable	files.html#ffInheritable	FileFlag.ffInheritable	
+FileFlag	files.html#FileFlag	files: FileFlag	
+IOError	files.html#IOError	files: IOError	
+initIOError	files.html#initIOError,IOError,Natural,int32,string	files: initIOError(e: var IOError; bytesTransferred: Natural; errorCode: int32;\n            additionalInfo = &quot;&quot;)	
+newIOError	files.html#newIOError,Natural,int32,string	files: newIOError(bytesTransferred: Natural; errorCode: int32; additionalInfo = &quot;&quot;): ref IOError	
+`=copy`	files.html#=copy,FileImpl,FileImpl	files: `=copy`(dest: var FileImpl; src: FileImpl)	
+close	files.html#close,AnyFile	files: close(f: AnyFile)	
+newFile	files.html#newFile,FD	files: newFile(fd: FD): File	
+newAsyncFile	files.html#newAsyncFile,FD	files: newAsyncFile(fd: FD): AsyncFile	
+fd	files.html#fd,AnyFile	files: fd(f: AnyFile): FD	
+takeFD	files.html#takeFD,AnyFile	files: takeFD(f: AnyFile): FD	
+read	files.html#read,File,openArray[T]	files: read[T: byte or char](f: File; b: var openArray[T]): int	
+read	files.html#read,AsyncFile,ref.T	files: read[T: string or seq[byte]](f: AsyncFile; b: ref T): Future[int]	
+write	files.html#write,File,openArray[T]	files: write[T: byte or char](f: File; b: openArray[T])	
+write	files.html#write,AsyncFile,T	files: write[T: string or seq[byte]](f: AsyncFile; b: T): Future[void]	

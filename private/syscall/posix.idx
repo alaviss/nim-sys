@@ -1,0 +1,4 @@
+FIOCLEX	private/syscall/posix.html#FIOCLEX	posix: FIOCLEX	
+FIONCLEX	private/syscall/posix.html#FIONCLEX	posix: FIONCLEX	
+dup3	private/syscall/posix.html#dup3,cint,cint,cint	posix: dup3(oldfd, newfd, flags: cint): cint	
+pipe2	private/syscall/posix.html#pipe2,array[,cint],cint	posix: pipe2(pipefd: var array[2, cint]; flags: cint): cint	
