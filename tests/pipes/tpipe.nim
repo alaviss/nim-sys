@@ -11,6 +11,10 @@ let TestBufferedData = "!@#$%^TEST%$#@!\n".repeat(10_000_000)
   ##
   ## Declared as a `let` to avoid binary size being inflated by the inlining.
 
+template skipArcBug() =
+  when (defined(gcArc) or defined(gcOrc)) and (NimMajor, NimMinor) < (1, 5):
+    skip "Doesn't work on ARC/ORC due to a Nim 1.4 bug, see nim-lang/Nim#18214"
+
 suite "Test Pipe read/write behaviors":
   when defined(posix):
     ## Disable SIGPIPE for EOF write tests
@@ -24,6 +28,8 @@ suite "Test Pipe read/write behaviors":
     check rd.read(str) == 0
 
   test "AsyncPipe EOF read":
+    skipArcBug()
+
     let (rd, wr) = newAsyncPipe()
 
     close wr
@@ -44,6 +50,8 @@ suite "Test Pipe read/write behaviors":
         raise e # Reraise so expect can catch it
 
   test "AsyncPipe EOF write":
+    skipArcBug()
+
     let (rd, wr) = newAsyncPipe()
 
     close rd
@@ -71,8 +79,7 @@ suite "Test Pipe read/write behaviors":
     joinThread thr
 
   test "AsyncPipe read/write":
-    when (defined(gcArc) or defined(gcOrc)) and (NimMajor, NimMinor) < (1, 5):
-      skip "It doesn't work on ARC due to a Nim 1.4 bug, see nim-lang/Nim#18214"
+    skipArcBug()
 
     let (rd, wr) = newAsyncPipe()
 
@@ -88,6 +95,8 @@ suite "Test Pipe read/write behaviors":
     check wrFut.finished
 
   test "Sync read and async write test":
+    skipArcBug()
+
     proc readWorker(rd: ptr ReadPipe) {.thread.} =
       {.gcsafe.}:
         var rdBuf = newString TestBufferedData.len
@@ -103,8 +112,7 @@ suite "Test Pipe read/write behaviors":
     joinThread thr
 
   test "Async read and sync write test":
-    when (defined(gcArc) or defined(gcOrc)) and (NimMajor, NimMinor) < (1, 5):
-      skip "It doesn't work on ARC due to a Nim 1.4 bug, see nim-lang/Nim#18214"
+    skipArcBug()
 
     proc writeWorker(wr: ptr WritePipe) {.thread.} =
       {.gcsafe.}:
