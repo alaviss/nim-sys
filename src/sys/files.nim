@@ -27,6 +27,9 @@ elif defined(windows):
 else:
   {.error: "This module has not been ported to your operating system.".}
 
+when (defined(gcArc) or defined(gcOrc)) and (NimMajor, NimMinor) < (1, 5):
+  {.warning: "Async types are not supported on Nim < 1.5 due to nim-lang/Nim#18214".}
+
 type
   File* = ref FileImpl
     ## An object representing a file. This is an opaque object with

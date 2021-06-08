@@ -71,6 +71,9 @@ suite "Test Pipe read/write behaviors":
     joinThread thr
 
   test "AsyncPipe read/write":
+    when (defined(gcArc) or defined(gcOrc)) and (NimMajor, NimMinor) < (1, 5):
+      skip "It doesn't work on ARC due to a Nim 1.4 bug, see nim-lang/Nim#18214"
+
     let (rd, wr) = newAsyncPipe()
 
     let wrFut = wr.write TestBufferedData
@@ -100,6 +103,9 @@ suite "Test Pipe read/write behaviors":
     joinThread thr
 
   test "Async read and sync write test":
+    when (defined(gcArc) or defined(gcOrc)) and (NimMajor, NimMinor) < (1, 5):
+      skip "It doesn't work on ARC due to a Nim 1.4 bug, see nim-lang/Nim#18214"
+
     proc writeWorker(wr: ptr WritePipe) {.thread.} =
       {.gcsafe.}:
         wr.write TestBufferedData
