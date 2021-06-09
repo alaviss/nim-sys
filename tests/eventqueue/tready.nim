@@ -1,6 +1,6 @@
 {.experimental: "implicitDeref".}
 
-when defined(linux):
+when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
   import std/[posix, os, strutils]
   import pkg/[cps, balls]
   import sys/[files, eventqueue, handles]
