@@ -7,11 +7,13 @@ when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
 
   import ".."/helpers/handles as helper_handle
 
-  const
-    TestData = "!@#$%^TEST%$#@!\n"
-    BigTestData = TestData.repeat(10_000_000)
-      ## A decently sized chunk of data that surpasses most OS pipe buffer size,
-      ## which is usually in the range of 4-8MiB.
+  const TestData = "!@#$%^TEST%$#@!\n"
+  let BigTestData = TestData.repeat(10 * 1024 * 1024)
+    ## A decently sized chunk of data that surpasses most OS pipe buffer size,
+    ## which is usually in the range of 4-8MiB.
+    ##
+    ## Declared as as a `let` to avoid binary size, and compiler RAM usage
+    ## from being inflated by the inlining.
 
   proc newAsyncPipe(): tuple[rd, wr: ref Handle[FD]] =
     var (rd, wr) = helper_handle.pipe()
