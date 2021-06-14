@@ -60,9 +60,7 @@ when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
         let read = read(rd, buf.toOpenArray(offset, buf.len - 1))
         buf.setLen offset + read
         break
-      except files.IOError:
-        # We have to do this due to disruptek/cps#165
-        let e = (ref files.IOError) getCurrentException()
+      except files.IOError as e:
         # Add the offset so we know where exactly we are
         e.bytesTransferred += offset
         if e.errorCode == EAGAIN:
@@ -78,9 +76,7 @@ when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
       try:
         write(wr, buf.toOpenArray(offset, buf.len - 1))
         break
-      except files.IOError:
-        # We have to do this due to disruptek/cps#165
-        let e = (ref files.IOError) getCurrentException()
+      except files.IOError as e:
         # Add the offset so we know where exactly we are
         e.bytesTransferred += offset
         if e.errorCode == EAGAIN:
