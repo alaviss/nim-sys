@@ -3,7 +3,7 @@
 when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
   import std/[posix, os, strutils]
   import pkg/[cps, balls]
-  import sys/[files, eventqueue, handles]
+  import sys/[files, ioqueue, handles]
 
   import ".."/helpers/handles as helper_handle
 
@@ -65,7 +65,7 @@ when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
         e.bytesTransferred += offset
         if e.errorCode == EAGAIN:
           offset = e.bytesTransferred
-          wait rd.get, {Read}
+          wait rd.get, Read
         else:
           raise e
 
@@ -81,7 +81,7 @@ when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
         e.bytesTransferred += offset
         if e.errorCode == EAGAIN:
           offset = e.bytesTransferred
-          wait wr.get, {Write}
+          wait wr.get, Write
         else:
           raise e
 

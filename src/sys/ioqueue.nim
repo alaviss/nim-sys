@@ -1,0 +1,143 @@
+#
+#            Abstractions for operating system services
+#                   Copyright (c) 2021 Leorize
+#              Copyright (c) 2020-2021 Andy Davidoff
+#
+# Licensed under the terms of the MIT license which can be found in
+# the file "license.txt" included with this distribution. Alternatively,
+# the full text can be found at: https://spdx.org/licenses/MIT.html
+
+when defined(nimdoc) and (
+  (NimMajor, NimMinor) < (1, 5) or
+  not defined(linux)
+):
+  discard "You can't use it so docgen can't either"
+else:
+  ## A per-thread eventqueue for dispatching over I/O
+  ##
+  ## This is not meant to be a full-fledged eventqueue but rather a
+  ## supplementary for other queues implementation.
+
+  import handles
+  import std/[options, times, strutils]
+  import pkg/cps
+
+  const
+    InitError = "Could not initialize the event queue"
+      ## Used when initialization failed.
+
+    QueueError = "Could not queue event"
+      ## Used when queuing for events failed.
+
+    PollError = "Could not poll the operating system for events"
+      ## Used when poll() failed.
+
+    QueuedFDError = "The given resource handle ($1) is already waited on"
+      ## Used when the user wait() on more than once on a given FD
+
+  type
+    ReadyEvent* {.pure.} = enum
+      Read,
+      Write
+
+    PrematureCloseDefect* = object of Defect
+      ## A defect raised when a resource was invalidated while there is a
+      ## waiter for it in the queue.
+      ##
+      ## This is considered a programming error due to the fact that some
+      ## operating system might keep reporting events for the "closed" resource
+      ## since it might be kept alive by other hidden references (ie. `dup` on
+      ## a fd will cause epoll to keep reporting event for the original even
+      ## if the original is closed).
+      id*: int ## The unique ID of the resource, typically the resource handle,
+               ## but is dependant on the target operating system.
+
+  func newPrematureCloseDefect*(id: int): ref PrematureCloseDefect =
+    ## Creates a `PrematureCloseDefect`
+    result = newException(PrematureCloseDefect):
+      "Resource id " & $id & " was invalidated before its waiter could execute"
+    result.id = id
+
+  when defined(linux):
+    include private/ioqueue_linux
+  else:
+    {.error: "This module has not been ported to your operating system".}
+
+  type
+    EventQueue = EventQueueImpl
+
+  var eq {.threadvar.}: EventQueue
+
+  proc init() =
+    ## Initializes the event queue for processing.
+    initImpl()
+
+  proc running*(): bool =
+    ## Whether there are any continuations within the queue
+    runningImpl()
+
+  proc poll*(runnable: var seq[Continuation], timeout = none(Duration)) =
+    ## Poll the operating system for events and add continuations of which the
+    ## resources they are waiting for are ready to `runnable`.
+    ##
+    ## If `timeout` is `none(Duration)`, wait indefinitely until the operating
+    ## system signals an event.
+    ## If `timeout` is `DurationZero`, returns immediately iff there aren't any
+    ## continuations ready to be run.
+    ##
+    ## `timeout` is not precise, and the actual wait time depends on the target
+    ## operating system.
+    ##
+    ## If the queue is empty, returns immediately.
+    pollImpl()
+
+  proc run*() =
+    ## Wait for events and run all pending continuations in the queue. Stops
+    ## when the queue is empty.
+    var runnable: seq[Continuation]
+    while running():
+      # Get the continuations that are ready to be run.
+      poll(runnable)
+      # Run until the list is empty.
+      while runnable.len > 0:
+        discard trampoline runnable.pop()
+
+  using c: Continuation
+
+  when not declared(waitEventImpl):
+    template waitEventImpl() {.dirty.} =
+      {.error: "This operation is not available for your target platform".}
+
+  proc wait*(c; fd: AnyFD, event: ReadyEvent): Continuation {.cpsMagic.} =
+    ## Wait for the specified `fd` to be ready for the given `event`.
+    ##
+    ## For higher efficiency, only wait for ready state when the `fd` signalled
+    ## that it is not ready.
+    ##
+    ## Only one continuation can be queued for any given `fd` per thread. If
+    ## more than one is queued, ValueError will be raised.
+    ##
+    ## If `fd` is closed while in the queue, the continuation will only be
+    ## dropped when a new `fd` of the same number is registered into the queue.
+    init()
+    waitEventImpl()
+
+  when not declared(unregisterImpl):
+    template unregisterImpl() {.dirty.} =
+      {.error: "This operation is not available for your target platform".}
+
+  proc unregister*(fd: AnyFD) =
+    ## If `fd` was registered in the queue, remove it alongside its
+    ## continuation.
+    unregisterImpl()
+
+  when not declared(waitSignalImpl):
+    template waitSignalImpl() {.dirty.} =
+      {.error: "This operation is not available for your target platform".}
+
+  proc wait*(c; obj: AnyFD): Continuation {.cpsMagic.} =
+    ## Wait for the specified `obj` to be signaled.
+    init()
+    waitSignalImpl()
+
+  # TODO: wait() overload for "completion"
