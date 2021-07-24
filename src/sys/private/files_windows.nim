@@ -80,7 +80,7 @@ template readImpl() {.dirty.} =
     else:
       doAssert false, "unreachable!"
 
-func setPos(overlapped: CustomRef, pos: uint64) {.inline.} =
+proc setPos(overlapped: CustomRef, pos: uint64) {.inline.} =
   overlapped.offset = DWORD(pos and high uint32)
   overlapped.offsetHigh = DWORD(pos shr 32)
 
