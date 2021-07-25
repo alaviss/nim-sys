@@ -57,7 +57,7 @@ template newPipeImpl() {.dirty.} =
 
       pipeName = generateUniquePipeName()
       rd = CreateNamedPipeA(
-        pipeName,
+        cstring(pipeName),
         dwOpenMode = PipeAccessInbound or
           FileFlagFirstPipeInstance or
           rdExtraFlags,
@@ -74,7 +74,7 @@ template newPipeImpl() {.dirty.} =
     if rd == InvalidHandleValue:
       raise newOSError(GetLastError(), ErrorPipeCreation)
 
-    let wr = CreateFileA(pipeName, GenericWrite, dwShareMode = 0, addr sa,
+    let wr = CreateFileA(cstring(pipeName), GenericWrite, dwShareMode = 0, addr sa,
                          OpenExisting, wrExtraFlags,
                          hTemplateFile = cast[wincore.Handle](nil))
 

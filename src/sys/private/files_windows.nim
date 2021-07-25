@@ -38,10 +38,12 @@ template newFileImpl() {.dirty.} =
 
 template newAsyncFileImpl() {.dirty.} =
   result = new AsyncFileImpl
-  result[] = AsyncFileImpl FileImpl(
+  {.warning: "compiler bug workaround, see: https://github.com/nim-lang/Nim/issues/18570".}
+  let fileImpl = FileImpl(
     handle: initHandle(fd),
     seekable: GetFileType(wincore.Handle fd) == FileTypeDisk
   )
+  result[] = AsyncFileImpl fileImpl
   if fd != InvalidFD:
     register fd.AsyncFD
 
@@ -80,7 +82,7 @@ template readImpl() {.dirty.} =
     else:
       doAssert false, "unreachable!"
 
-func setPos(overlapped: CustomRef, pos: uint64) {.inline.} =
+proc setPos(overlapped: CustomRef, pos: uint64) {.inline.} =
   overlapped.offset = DWORD(pos and high uint32)
   overlapped.offsetHigh = DWORD(pos shr 32)
 
