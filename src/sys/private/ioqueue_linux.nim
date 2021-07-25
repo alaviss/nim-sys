@@ -6,8 +6,8 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
-import std/[deques, hashes, tables, times]
-import syscall/linux/epoll except FD # we want FD to refer to handles.FD
+import std/[deques, hashes, tables]
+import syscall/linux/epoll except FD, Event
 import syscall/posix
 import errors
 
@@ -25,7 +25,7 @@ type
       ## The table of FDs that were registered for waiting.
       ## These FDs may not be valid as they can be closed by the user and
       ## epoll might not notify us.
-      eventBuffer: seq[Event] ##
+      eventBuffer: seq[epoll.Event] ##
       ## A persistent buffer for receiving events from the kernel
     of false:
       discard
@@ -58,16 +58,24 @@ func toEv(sre: set[ReadyEvent]): Ev =
       result = result or EvIn
     of Write:
       result = result or EvOut
+    of PriorityRead:
+      result = result or EvPri
 
-func toReadyEvents(ev: Ev): set[ReadyEvent] =
+func toEvents(ev: Ev): set[Event] =
   ## Convert `epoll` bitflags into a set of `ReadyEvent`
   if ev.has EvIn:
     result.incl Read
   if ev.has EvOut:
     result.incl Write
+  if ev.has EvErr:
+    result.incl Error
+  if ev.has EvHup:
+    result.incl Hangup
+  if ev.has EvPri:
+    result.incl PriorityRead
 
 proc queue(eq: var EventQueueImpl, cont: Continuation, fd: AnyFD, event: ReadyEvent) =
-  var epEvent = Event(events: toEv({event}), data: Data(fd: fd.cint))
+  var epEvent = epoll.Event(events: toEv({event}), data: Data(fd: fd.cint))
   # If adding `fd` to epoll fails
   if eq.epoll.get.ctl(CtlAdd, fd, epEvent) == -1:
     # In case `fd` was already registered
@@ -127,12 +135,14 @@ template pollImpl() {.dirty.} =
     let waiter = move eq.waiters[fd]
     eq.waiters.del fd
 
-    let ready = toReadyEvents event.events
-    if waiter.event notin ready:
+    let ready = toEvents event.events
+    # If the registered event is ready or epoll raised an exceptional event.
+    if waiter.event in ready or {Error, Hangup} * ready != {}:
+      # Consider the continuation runnable.
+      runnable.add waiter.cont
+    else:
       raise newException(Defect):
-        "Events " & $ready & " were signalled but the queued " & $waiter.event & " was not in the list. This is a nim-sys bug."
-
-    runnable.add waiter.cont
+        "epoll signalled for events " & $ready & " but the registered event " & $waiter.event & " is not signalled. This is a nim-sys bug."
 
 template waitEventImpl() {.dirty.} =
   let fd =
@@ -142,3 +152,27 @@ template waitEventImpl() {.dirty.} =
       fd
 
   eq.queue(c, fd, event)
+
+template unregisterImpl() {.dirty.} =
+  if not eq.initialized: return
+
+  # If the FD is in the waiter list
+  if fd in eq.waiters:
+    # Deregister it from epoll
+    let status = eq.epoll.get.ctl(CtlDel, fd, nil)
+    if status == -1:
+      # If the FD is in the waiter list but epoll said that it's never
+      # registered or that it's invalid, then its already closed before being
+      # unregistered, which is a programming bug.
+      if errno == ENOENT or errno == EBADF:
+        raise newPrematureCloseDefect(fd.int)
+      else:
+        posixChk status, UnregisterError
+
+    # Then remove the waiter
+    eq.waiters.del fd
+  else:
+    # If the FD is not in the waiter list, then there is no need to do anything
+    # as either the FD has never been registered, or it's not being waited for,
+    # of which it will already be disabled as all FD are registered as oneshot.
+    discard

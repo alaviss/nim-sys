@@ -5,6 +5,7 @@ when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
   import pkg/[cps, balls]
   import sys/[files, ioqueue, handles]
 
+  import asyncio
   import ".."/helpers/handles as helper_handle
 
   const TestData = "!@#$%^TEST%$#@!\n"
@@ -15,79 +16,12 @@ when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
     ## Declared as as a `let` to avoid binary size, and compiler RAM usage
     ## from being inflated by the inlining.
 
-  proc newAsyncPipe(): tuple[rd, wr: ref Handle[FD]] =
-    var (rd, wr) = helper_handle.pipe()
-
-    rd.setBlocking(false)
-    wr.setBlocking(false)
-
-    result = (newHandle(rd), newHandle(wr))
-
-  proc write[T: byte or char](fd: Handle[FD], data: openArray[T]) =
-    ## Write all bytes in `data` into `fd`.
-    var totalWritten = 0
-    while totalWritten < data.len:
-      let written = write(fd.get.cint, data[totalWritten].unsafeAddr, data.len - totalWritten)
-      case written
-      of -1:
-        raise newIOError(totalWritten, errno.int32)
-      else:
-        totalWritten += written
-
-  proc read[T: byte or char](fd: Handle[FD], buf: var openArray[T]): int =
-    ## Read all bytes from `fd` into `buf` until it's filled or there is
-    ## nothing left to read
-    while result < buf.len:
-      let readBytes = read(fd.get.cint, buf[result].addr, buf.len - result)
-      case readBytes
-      of -1:
-        raise newIOError(result, errno.int32)
-      of 0:
-        break
-      else:
-        result += readBytes
-
-  proc readAsync(rd: ref Handle[FD], buf: ref string) {.cps: Continuation.} =
-    ## Read data from `rd` until `buf` is filled or there is nothing else
-    ## to be read, asynchronously.
-    ##
-    ## After finished, `buf` will be set to the length of the data received.
-    ## It is done like this since our dispatcher don't provide tracking
-    ## information outside of cps yet
-    var offset = 0
-    while offset < buf.len:
-      try:
-        let read = read(rd, buf.toOpenArray(offset, buf.len - 1))
-        buf.setLen offset + read
-        break
-      except files.IOError as e:
-        # Add the offset so we know where exactly we are
-        e.bytesTransferred += offset
-        if e.errorCode == EAGAIN:
-          offset = e.bytesTransferred
-          wait rd.get, Read
-        else:
-          raise e
-
-  proc writeAsync(wr: ref Handle[FD], buf: string) {.cps: Continuation.} =
-    ## Write all bytes in `buf` into `wr` asynchronously
-    var offset = 0
-    while offset < buf.len:
-      try:
-        write(wr, buf.toOpenArray(offset, buf.len - 1))
-        break
-      except files.IOError as e:
-        # Add the offset so we know where exactly we are
-        e.bytesTransferred += offset
-        if e.errorCode == EAGAIN:
-          offset = e.bytesTransferred
-          wait wr.get, Write
-        else:
-          raise e
-
   suite "Test readiness behaviors":
     test "Ready to read":
       var (rd, wr) = newAsyncPipe()
+      defer:
+        unregister rd
+        unregister wr
 
       let str = new string
       str.setLen(TestData.len)
@@ -107,6 +41,9 @@ when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
 
     test "Ready to write":
       var (rd, wr) = newAsyncPipe()
+      defer:
+        unregister rd
+        unregister wr
 
       # Fill our buffer til we can't write anymore
       try:
@@ -144,6 +81,9 @@ when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
 
     test "Multiple waiters for read/write":
       var (rd, wr) = newAsyncPipe()
+      defer:
+        unregister rd
+        unregister wr
 
       var str = new string
       str.setLen(BigTestData.len)

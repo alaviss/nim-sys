@@ -35,10 +35,22 @@ else:
     QueuedFDError = "The given resource handle ($1) is already waited on"
       ## Used when the user wait() on more than once on a given FD
 
+    UnregisterError = "Could not unregister resource from the OS"
+      ## Used when unregister() fails
+
   type
-    ReadyEvent* {.pure.} = enum
-      Read,
-      Write
+    Event* {.pure.} = enum
+      ## Events that the operating system can signal.
+      Read ## The resource is ready to be read from.
+      Write ## The resource is ready to be written to.
+      PriorityRead ## The resource has high-priority data available to be read.
+
+      Error ## There is an error associated with the resource.
+      Hangup ## The resource has been hung up, usually this means
+             ## a peer has closed its end of the channel.
+
+    ReadyEvent* = range[Read..PriorityRead]
+      ## Events that can be registered to be waited for
 
     PrematureCloseDefect* = object of Defect
       ## A defect raised when a resource was invalidated while there is a
@@ -49,6 +61,9 @@ else:
       ## since it might be kept alive by other hidden references (ie. `dup` on
       ## a fd will cause epoll to keep reporting event for the original even
       ## if the original is closed).
+      ##
+      ## To avoid this, unregister the resource from the queue before invalidating
+      ## it.
       id*: int ## The unique ID of the resource, typically the resource handle,
                ## but is dependant on the target operating system.
 
@@ -117,10 +132,16 @@ else:
     ## Only one continuation can be queued for any given `fd` per thread. If
     ## more than one is queued, ValueError will be raised.
     ##
-    ## If `fd` is closed while in the queue, the continuation will only be
-    ## dropped when a new `fd` of the same number is registered into the queue.
+    ## **Note**: Any `fd` registered into the queue (via this procedure) should be
+    ## unregistered before it is closed as the semantics differs between operating
+    ## system for when an FD is closed while in the queue. If such scenario is
+    ## detected, `PrematureCloseDefect` will be raised.
     init()
     waitEventImpl()
+
+  proc wait*(c; fd: Handle[AnyFD], event: ReadyEvent): Continuation {.cpsMagic.} =
+    ## An overload of `wait` for `Handle`.
+    wait(c, fd.get, event)
 
   when not declared(unregisterImpl):
     template unregisterImpl() {.dirty.} =
@@ -129,7 +150,13 @@ else:
   proc unregister*(fd: AnyFD) =
     ## If `fd` was registered in the queue, remove it alongside its
     ## continuation.
+    ##
+    ## Does nothing if the `fd` is not in the queue.
     unregisterImpl()
+
+  proc unregister*(fd: Handle[AnyFD]) =
+    ## An overload of `unregister` for `Handle`
+    unregister(fd.get)
 
   when not declared(waitSignalImpl):
     template waitSignalImpl() {.dirty.} =
@@ -139,5 +166,9 @@ else:
     ## Wait for the specified `obj` to be signaled.
     init()
     waitSignalImpl()
+
+  proc wait*(c; obj: Handle[AnyFD]): Continuation {.cpsMagic.} =
+    ## An overload of `wait` for `Handle`.
+    wait(c, obj.get)
 
   # TODO: wait() overload for "completion"
