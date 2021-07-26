@@ -6,7 +6,7 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
-import std/[deques, hashes, tables]
+import std/[hashes, tables]
 import syscall/linux/epoll except FD, Event
 import syscall/posix
 import errors
