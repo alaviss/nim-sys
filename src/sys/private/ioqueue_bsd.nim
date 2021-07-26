@@ -150,7 +150,7 @@ template unregisterImpl() {.dirty.} =
   # If the FD is in the waiter list
   if fd in eq.waiters:
     # Deregister it from kqueue
-    let status = eq.kqueue.kevent([
+    let status = eq.kqueue.get.kevent([
       # kqueue map events using a tuple of filter & identifier, so we
       # need to reproduce both to delete the event that we want.
       Kevent(ident: fd.uint, filter: toFilter(eq.waiters[fd].event),
