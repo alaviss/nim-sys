@@ -1,6 +1,6 @@
 {.experimental: "implicitDeref".}
 
-when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
+when (NimMajor, NimMinor) >= (1, 5) and (defined(linux) or defined(macosx) or defined(bsd)):
   import std/[posix, os, strutils]
   import pkg/[cps, balls]
   import sys/[files, ioqueue, handles]

@@ -1,4 +1,4 @@
-when (NimMajor, NimMinor) >= (1, 5) and defined(linux):
+when (NimMajor, NimMinor) >= (1, 5) and (defined(linux) or defined(macosx) or defined(bsd)):
   import pkg/[cps, balls]
   import sys/[handles, ioqueue]
 

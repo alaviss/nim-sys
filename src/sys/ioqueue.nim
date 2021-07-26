@@ -9,7 +9,7 @@
 
 when defined(nimdoc) and (
   (NimMajor, NimMinor) < (1, 5) or
-  not defined(linux)
+  not defined(linux) or not defined(macosx) or not defined(bsd)
 ):
   discard "You can't use it so docgen can't either"
 else:
@@ -75,6 +75,8 @@ else:
 
   when defined(linux):
     include private/ioqueue_linux
+  elif defined(macosx) or defined(bsd):
+    include private/ioqueue_bsd
   else:
     {.error: "This module has not been ported to your operating system".}
 
