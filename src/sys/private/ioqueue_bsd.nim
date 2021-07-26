@@ -86,7 +86,7 @@ proc queue(eq: var EventQueueImpl, cont: Continuation, fd: AnyFD, event: ReadyEv
   )
 
   posixChk eq.kqueue.get.kevent(changeList = [kevent]), QueueError
-  eq.waiters[fd] = Waiter(cont: cont, event: Event)
+  eq.waiters[fd] = Waiter(cont: cont, event: event)
 
 func toTimespec(d: Duration): Timespec =
   ## Convert a Duration to Timespec
