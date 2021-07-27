@@ -82,7 +82,10 @@ proc queue(eq: var EventQueueImpl, cont: Continuation, fd: FD, event: ReadyEvent
     ident: Ident(fd),
     filter: event.toFilter,
     # Use dispatch so we don't have to unregister the fd later
-    flags: EvAdd or EvDispatch
+    # While EvAdd implies EvEnable, this only happens when the event
+    # was first added, further invocation will not re-enable the
+    # event, hence we pass it explicitly here.
+    flags: EvAdd or EvEnable or EvDispatch
   )
 
   posixChk eq.kqueue.get.kevent(changeList = [kevent]), QueueError
