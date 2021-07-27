@@ -168,8 +168,8 @@ template unregisterImpl() {.dirty.} =
       else:
         posixChk status, UnregisterError
 
-      # Then remove the waiter
-      eq.waiters.del fd
+    # Then remove the waiter
+    eq.waiters.del fd
   else:
     # If the FD is not in the waiter list, then there is no need to do anything
     # as either the FD has never been registered, or it's not being waited for,
