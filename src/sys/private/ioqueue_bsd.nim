@@ -73,13 +73,13 @@ func toEvents(kev: Kevent): set[Event] =
   if kev.flags.has EvEOF:
     result.incl Hangup
 
-proc queue(eq: var EventQueueImpl, cont: Continuation, fd: AnyFD, event: ReadyEvent) =
+proc queue(eq: var EventQueueImpl, cont: Continuation, fd: FD, event: ReadyEvent) =
   if fd in eq.waiters:
     # Error out since we don't support more than one waiter
     raise newException(ValueError, QueuedFDError % $fd.cint)
 
   let kevent = Kevent(
-    ident: uint(fd),
+    ident: Ident(fd),
     filter: event.toFilter,
     # Use dispatch so we don't have to unregister the fd later
     flags: EvAdd or EvDispatch
@@ -153,7 +153,7 @@ template unregisterImpl() {.dirty.} =
     let status = eq.kqueue.get.kevent([
       # kqueue map events using a tuple of filter & identifier, so we
       # need to reproduce both to delete the event that we want.
-      Kevent(ident: fd.uint, filter: toFilter(eq.waiters[fd].event),
+      Kevent(ident: Ident(fd), filter: toFilter(eq.waiters[fd].event),
              flags: EvDelete)
     ])
     if status == -1:

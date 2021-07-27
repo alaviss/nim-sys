@@ -9,11 +9,23 @@
 ## Wrappers for kqueue.
 ##
 ## Only the parts common between BSDs implementations are wrapped.
+##
+## For macOS, we wrap the `kevent64` interface and the `kevent` is a
+## compatibility wrapper. This is due to Nim not being able to replicate
+## the `kevent` structure accurately (lack a `#pragma pack` equivalent).
 
 import ".."/posix
 import ".."/".."/".."/handles
 
 type
+  Ident* = distinct (
+    when defined(macosx):
+      uint64
+    else:
+      uint
+  )
+  ## Type used for event identifier
+
   Filter* = distinct (
     when defined(freebsd) or defined(openbsd) or defined(dragonfly):
       cshort
@@ -48,19 +60,54 @@ type
   )
     ## Type used for filter specific flags
 
-  Kevent* {.pure.} = object
-    ## The kevent structure
-    ##
-    ## **Note**: This struct is not ABI compatible with FreeBSD 12, but this is not
-    ## an issue for the `kevent()` wrapper below, as its configured to link to the
-    ## FreeBSD 11-compatible version.
-    ident*: uint ## Event identifier, interpretation is determined by the filter
-    filter*: Filter ## Kernel filter used to process the event
-    flags*: Ev ## Actions to perform on the event
-    fflags*: FilterFlag ## Filter-specific flags
-    data*: int64 ## Filter-specific data value
-    udata*: pointer ## Opaque user-defined value
+  FilterData* = (
+    when defined(freebsd) or defined(dragonfly):
+      int
+    elif defined(openbsd) or defined(netbsd) or defined(macosx):
+      int64
+    else:
+      {.error: "This module has not been ported to your operating system".}
+  )
+    ## Type used for filter specific data
 
+  UserData* = distinct (
+    when defined(macosx):
+      uint64
+    else:
+      pointer
+  )
+    ## Type used for user data
+
+when defined(macosx):
+  type
+    Kevent* {.pure.} = object
+      ## The kevent structure
+      ##
+      ## **Note**: This corresponds to `kevent64_s` structure.
+      ident*: Ident ## Event identifier, interpretation is determined by the filter
+      filter*: Filter ## Kernel filter used to process the event
+      flags*: Ev ## Actions to perform on the event
+      fflags*: FilterFlag ## Filter-specific flags
+      data*: FilterData ## Filter-specific data value
+      udata*: UserData ## Opaque user-defined value
+      ext*: array[2, uint64] ## Filter-specific extensions
+
+else:
+  type
+    Kevent* {.pure.} = object
+      ## The kevent structure
+      ##
+      ## **Note**: This struct is not ABI compatible with FreeBSD 12, but this is not
+      ## an issue for the `kevent()` wrapper below, as its configured to link to the
+      ## FreeBSD 11-compatible version.
+      ident*: Ident ## Event identifier, interpretation is determined by the filter
+      filter*: Filter ## Kernel filter used to process the event
+      flags*: Ev ## Actions to perform on the event
+      fflags*: FilterFlag ## Filter-specific flags
+      data*: FilterData ## Filter-specific data value
+      udata*: UserData ## Opaque user-defined value
+
+type
   FD* = distinct handles.FD
     ## Type used for kqueue FDs
 
@@ -158,9 +205,21 @@ type
   )
   ## The type used for the size of lists passed to kevent
 
-proc kevent*(kq: FD, changeList: ptr UncheckedArray[Kevent], nchanges: ListSize,
-             eventList: ptr UncheckedArray[Kevent], nevents: ListSize,
-             timeout: ptr Timespec): cint {.cdecl, importc, sideEffect.}
+when defined(macosx):
+  proc kevent64*(kq: FD, changeList: ptr UncheckedArray[Kevent], nchanges: ListSize,
+                 eventList: ptr UncheckedArray[Kevent], nevents: ListSize,
+                 flags: cuint,
+                 timeout: ptr Timespec): cint {.cdecl, importc, sideEffect.}
+
+  proc kevent*(kq: FD, changeList: ptr UncheckedArray[Kevent], nchanges: ListSize,
+               eventList: ptr UncheckedArray[Kevent], nevents: ListSize,
+               timeout: ptr Timespec): cint {.inline.} =
+     kevent64(kq, changeList, nchanges, eventList, nevents, 0, timeout)
+
+else:
+  proc kevent*(kq: FD, changeList: ptr UncheckedArray[Kevent], nchanges: ListSize,
+               eventList: ptr UncheckedArray[Kevent], nevents: ListSize,
+               timeout: ptr Timespec): cint {.cdecl, importc, sideEffect.}
 
 proc kevent*(kq: FD, changeList: openArray[Kevent],
              eventList: var openArray[Kevent],
