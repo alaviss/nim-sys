@@ -24,7 +24,7 @@ type
     else:
       uint
   )
-  ## Type used for event identifier
+    ## Type used for event identifier
 
   Filter* = distinct (
     when defined(freebsd) or defined(openbsd) or defined(dragonfly):
