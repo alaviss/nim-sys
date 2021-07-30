@@ -9,18 +9,20 @@
 
 ## Common constants shared between ioqueue modules
 
-const
-  InitError* = "Could not initialize the event queue"
-    ## Used when initialization failed.
+type
+  Error* {.pure.} = enum
+    ## Enums for errors raised by this module
+    Init = "Could not initialize the event queue"
+      ## Used when initialization failed.
 
-  QueueError* = "Could not queue event"
-    ## Used when queuing for events failed.
+    Queue = "Could not queue event"
+      ## Used when queuing for events failed.
 
-  PollError* = "Could not poll the operating system for events"
-    ## Used when poll() failed.
+    Poll = "Could not poll the operating system for events"
+      ## Used when poll() failed.
 
-  QueuedFDError* = "The given resource handle ($1) is already waited on"
-    ## Used when the user wait() on more than once on a given FD
+    QueuedFD = "The given resource handle ($1) is already waited on"
+      ## Used when the user wait() on more than once on a given FD
 
-  UnregisterError* = "Could not unregister resource from the OS"
-    ## Used when unregister() fails
+    Unregister = "Could not unregister resource from the OS"
+      ## Used when unregister() fails

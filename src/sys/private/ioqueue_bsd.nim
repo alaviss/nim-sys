@@ -38,7 +38,7 @@ template initImpl() {.dirty.} =
   if eq.initialized: return
 
   let kqfd = kqueue()
-  posixChk kqfd.cint, InitError
+  posixChk kqfd.cint, $Error.Init
 
   eq = EventQueueImpl(
     initialized: true,
@@ -71,14 +71,14 @@ func toEvents(kev: Kevent): set[Event] =
     raise newException(ValueError, "Unsupported event filter: " & $kev.filter)
 
   if kev.flags.has EvError:
-    result.incl Error
+    result.incl Event.Error
   if kev.flags.has EvEOF:
     result.incl Hangup
 
 proc queue(eq: var EventQueueImpl, cont: Continuation, fd: FD, event: ReadyEvent) =
   if fd in eq.waiters:
     # Error out since we don't support more than one waiter
-    raise newException(ValueError, QueuedFDError % $fd.cint)
+    raise newException(ValueError, $Error.QueuedFD % $fd.cint)
 
   let kevent = Kevent(
     ident: Ident(fd),
@@ -90,7 +90,7 @@ proc queue(eq: var EventQueueImpl, cont: Continuation, fd: FD, event: ReadyEvent
     flags: EvAdd or EvEnable or EvDispatch
   )
 
-  posixChk eq.kqueue.get.kevent(changeList = [kevent]), QueueError
+  posixChk eq.kqueue.get.kevent(changeList = [kevent]), $Error.Queue
   eq.waiters[fd] = Waiter(cont: cont, event: event)
 
 func toTimespec(d: Duration): Timespec =
@@ -115,7 +115,7 @@ template pollImpl() {.dirty.} =
         eventList = eq.eventBuffer,
         timeout = toTimespec(timeout.get)
       )
-  posixChk nevents, PollError
+  posixChk nevents, $Error.Poll
   # Set the length of the buffer to the amount of events received
   eq.eventBuffer.setLen nevents
 
@@ -171,7 +171,7 @@ template unregisterImpl() {.dirty.} =
       if errno == ENOENT or errno == EBADF:
         raise newPrematureCloseDefect(fd.int)
       else:
-        posixChk status, UnregisterError
+        posixChk status, $Error.Unregister
 
     # Then remove the waiter
     eq.waiters.del fd

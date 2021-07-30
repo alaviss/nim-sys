@@ -38,7 +38,7 @@ template initImpl() {.dirty.} =
   if eq.initialized: return
 
   let epfd = epoll.create(flags = O_CLOEXEC)
-  posixChk epfd.cint, InitError
+  posixChk epfd.cint, $Error.Init
 
   eq = EventQueueImpl(
     initialized: true,
@@ -70,7 +70,7 @@ func toEvents(ev: Ev): set[Event] =
   if ev.has EvOut:
     result.incl Write
   if ev.has EvErr:
-    result.incl Error
+    result.incl Event.Error
   if ev.has EvHup:
     result.incl Hangup
   if ev.has EvPri:
@@ -85,12 +85,12 @@ proc queue(eq: var EventQueueImpl, cont: Continuation, fd: AnyFD, event: ReadyEv
       # If there is a waiter in the queue
       if fd in eq.waiters:
         # Error out since we don't support more than one waiter
-        raise newException(ValueError, QueuedFDError % $fd.cint)
+        raise newException(ValueError, $Error.QueuedFD % $fd.cint)
 
       # Otherwise re-register our event
-      posixChk eq.epoll.get.ctl(CtlMod, fd, epEvent), QueueError
+      posixChk eq.epoll.get.ctl(CtlMod, fd, epEvent), $Error.Queue
     else:
-      posixChk -1, QueueError
+      posixChk -1, $Error.Queue
 
   # Since registering `fd` succeed, it's either:
   #   - A FD previously registered but there aren't any waiters (captured above)
@@ -121,7 +121,7 @@ template pollImpl() {.dirty.} =
 
   # Obtain the events that are ready
   let selected = eq.epoll.get.wait(eq.eventBuffer, timeout)
-  posixChk selected, PollError
+  posixChk selected, $Error.Poll
   # Set the length of the buffer to the amount of events received
   eq.eventBuffer.setLen selected
 
@@ -139,7 +139,7 @@ template pollImpl() {.dirty.} =
 
     let ready = toEvents event.events
     # If the registered event is ready or epoll raised an exceptional event.
-    if waiter.event in ready or {Error, Hangup} * ready != {}:
+    if waiter.event in ready or {Event.Error, Hangup} * ready != {}:
       # Consider the continuation runnable.
       runnable.add waiter.cont
     else:
@@ -169,7 +169,7 @@ template unregisterImpl() {.dirty.} =
       if errno == ENOENT or errno == EBADF:
         raise newPrematureCloseDefect(fd.int)
       else:
-        posixChk status, UnregisterError
+        posixChk status, $Error.Unregister
 
     # Then remove the waiter
     eq.waiters.del fd

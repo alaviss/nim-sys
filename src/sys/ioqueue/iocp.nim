@@ -11,7 +11,7 @@ import pkg/cps
 import ".."/handles
 
 import ".."/private/[ioqueue_common, errors]
-import ".."/private/syscall/winim/winim/core as wincore except Handle
+import ".."/private/syscall/winim/winim/core as wincore except Handle, Error
 
 ## Windows-specific implementation of `ioqueue`.
 ##
@@ -58,7 +58,7 @@ proc init() =
   )
 
   if iocp == wincore.Handle(0):
-    raise newOSError(GetLastError(), InitError)
+    raise newOSError(GetLastError(), $Error.Init)
 
   eq = EventQueue(
     initialized: true,
@@ -93,7 +93,7 @@ proc poll(runnable: var seq[Continuation], timeout = none(Duration)) {.used.} =
     if errorCode == WaitTimeout:
       discard "timed out without any event removed"
     else:
-      raise newOSError(errorCode, PollError)
+      raise newOSError(errorCode, $Error.Poll)
 
   # Set the buffer length to the amount received
   eq.eventBuffer.setLen selected
@@ -157,13 +157,13 @@ proc wait*(c; fd: AnyFD, overlapped: ref Overlapped): Continuation {.cpsMagic.} 
     # Raise an error
     #
     # This will be temporary until we drafted out the semantics for these.
-    raise newException(ValueError, QueuedFDError % $fd.int)
+    raise newException(ValueError, $Error.QueuedFD % $fd.int)
 
   # Register the handle with IOCP
   if CreateIoCompletionPort(
     wincore.Handle(fd), wincore.Handle(eq.iocp.get), ULongPtr(fd), 0
   ) == wincore.Handle(0):
-    raise newOSError(GetLastError(), QueueError)
+    raise newOSError(GetLastError(), $Error.Queue)
 
   eq.waiters[fd] = Waiter(cont: c, overlapped: overlapped)
 
@@ -189,7 +189,7 @@ proc unregister(fd: AnyFD) {.used.} =
       if errorCode == ErrorNotFound:
         discard
       else:
-        raise newOSError(errorCode, UnregisterError)
+        raise newOSError(errorCode, $Error.Unregister)
 
     # Move the waiter to cancel queue. We index this queue with the pointer so
     # that we can safely index it with arbitrary `ptr Overlapped` coming from
