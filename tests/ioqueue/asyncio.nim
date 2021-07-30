@@ -94,9 +94,8 @@ proc readAsync*(rd: ref Handle[FD], buf: ref string) {.cps: Continuation.} =
         discard "it's just EOF"
       else:
         raise newIOError(0, errorCode)
-    # Some long magic to make checked conversion from uint_ptr to dword possible.
-    let errorCode = DWORD(cast[uint](overlapped.Internal))
-    let read = DWORD(cast[uint](overlapped.InternalHigh))
+    let errorCode = DWORD(overlapped.Internal)
+    let read = DWORD(overlapped.InternalHigh)
     if errorCode != ErrorSuccess or errorCode != ErrorHandleEof:
       raise newIOError(read, errorCode)
 
@@ -131,8 +130,8 @@ proc writeAsync*(wr: ref Handle[FD], buf: string) {.cps: Continuation.} =
       else:
         raise newIOError(0, errorCode)
     # Some long magic to make checked conversion from uint_ptr to dword possible.
-    let errorCode = DWORD(cast[uint](overlapped.Internal))
-    let written = DWORD(cast[uint](overlapped.InternalHigh))
+    let errorCode = DWORD(overlapped.Internal)
+    let written = DWORD(overlapped.InternalHigh)
     if errorCode != ErrorSuccess:
       raise newIOError(written, errorCode)
   else:
