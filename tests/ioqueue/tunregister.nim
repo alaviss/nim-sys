@@ -1,7 +1,6 @@
 {.experimental: "implicitDeref".}
 
-when (NimMajor, NimMinor) >= (1, 5) and (defined(linux) or defined(macosx) or
-                                         defined(bsd) or defined(windows)):
+when (NimMajor, NimMinor) >= (1, 5):
   import pkg/[cps, balls]
   import sys/[handles, ioqueue]
 

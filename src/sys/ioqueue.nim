@@ -7,10 +7,7 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
-when defined(nimdoc) and (
-  (NimMajor, NimMinor) < (1, 5) or
-  not defined(linux) or not defined(macosx) or not defined(bsd)
-):
+when defined(nimdoc) and (NimMajor, NimMinor) < (1, 5):
   discard "You can't use it so docgen can't either"
 else:
   ## A per-thread eventqueue for dispatching over I/O
