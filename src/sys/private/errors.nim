@@ -18,12 +18,12 @@ template initOSError*(e: var OSError, errorCode: int32,
   ## but perform in-place creation instead.
   e.errorCode = errorCode
   e.msg = osErrorMsg(OSErrorCode errorCode)
+  if e.msg == "":
+    e.msg = "unknown OS error, code: ", $e.errorCode
   if additionalInfo.len > 0:
     if e.msg.len > 0 and e.msg[^1] != '\n': e.msg.add '\n'
     e.msg.add  "Additional info: "
     e.msg.addQuoted additionalInfo
-  if e.msg == "":
-    e.msg = "unknown OS error"
 
 proc newOSError*(errorCode: int32, additionalInfo = ""): ref OSError {.inline.} =
   result = new OSError
