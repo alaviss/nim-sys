@@ -19,7 +19,7 @@ template initOSError*(e: var OSError, errorCode: int32,
   e.errorCode = errorCode
   e.msg = osErrorMsg(OSErrorCode errorCode)
   if e.msg == "":
-    e.msg = "unknown OS error, code: ", $e.errorCode
+    e.msg = "unknown OS error, code: " & $e.errorCode
   if additionalInfo.len > 0:
     if e.msg.len > 0 and e.msg[^1] != '\n': e.msg.add '\n'
     e.msg.add  "Additional info: "
