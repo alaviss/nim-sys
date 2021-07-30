@@ -28,9 +28,9 @@ proc newAsyncPipe*(): tuple[rd, wr: ref Handle[FD]] =
 
     result = (newHandle(rd), newHandle(wr))
   else:
-    const PipeName = r"\\.\pipe\nim-sys-test"
+    let pipeName = r"\\.\pipe\nim-sys-test-" & $GetCurrentProcessID()
     let rd = CreateNamedPipeA(
-      PipeName,
+      cstring(pipeName),
       dwOpenMode = PipeAccessInbound or
         FileFlagFirstPipeInstance or FileFlagOverlapped,
       dwPipeMode = PipeTypeByte or PipeWait or PipeRejectRemoteClients,
@@ -41,8 +41,10 @@ proc newAsyncPipe*(): tuple[rd, wr: ref Handle[FD]] =
       nil
     )
     doAssert rd != InvalidHandleValue, "pipe creation failed"
-    let wr = CreateFileA(PipeName, GenericWrite, dwShareMode = 0, nil,
-                         OpenExisting, FileFlagOverlapped, winim.Handle(0))
+    let wr = CreateFileA(
+      cstring(pipeName), GenericWrite, dwShareMode = 0, nil, OpenExisting,
+      FileFlagOverlapped, winim.Handle(0)
+    )
     doAssert wr != InvalidHandleValue, "pipe creation failed"
 
 when defined(windows):
