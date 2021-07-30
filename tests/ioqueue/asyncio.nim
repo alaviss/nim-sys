@@ -98,7 +98,7 @@ proc readAsync*(rd: ref Handle[FD], buf: ref string) {.cps: Continuation.} =
         discard "Error handling below"
     let errorCode = DWORD(overlapped.Internal)
     let read = DWORD(overlapped.InternalHigh)
-    if errorCode != ErrorSuccess or errorCode != ErrorHandleEof:
+    if errorCode != ErrorSuccess and errorCode != ErrorHandleEof:
       raise newIOError(read, errorCode)
 
     buf.setLen read
