@@ -83,15 +83,18 @@ proc readAsync*(rd: ref Handle[FD], buf: ref string) {.cps: Continuation.} =
   ## information outside of cps yet
   when defined(windows):
     let overlapped = new Overlapped
+    debugEcho "initiating read"
     if ReadFile(
       winim.Handle(rd.get), addr buf[0], DWORD(buf.len), nil,
       addr overlapped[]
     ) == winim.FALSE:
       let errorCode = GetLastError()
+      debugEcho "read errored with ", errorCode
       if errorCode == ErrorIoPending:
         wait(rd.get, overlapped)
       else:
         discard "Error handling below"
+    debugEcho "read completed"
     let errorCode = DWORD(overlapped.Internal)
     let read = DWORD(overlapped.InternalHigh)
     if errorCode != ErrorSuccess or errorCode != ErrorHandleEof:
