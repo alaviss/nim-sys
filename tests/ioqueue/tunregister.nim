@@ -1,28 +1,32 @@
-when (NimMajor, NimMinor) >= (1, 5) and (defined(linux) or defined(macosx) or defined(bsd)):
+{.experimental: "implicitDeref".}
+
+when (NimMajor, NimMinor) >= (1, 5) and (defined(linux) or defined(macosx) or
+                                         defined(bsd) or defined(windows)):
   import pkg/[cps, balls]
   import sys/[handles, ioqueue]
 
-  import ".."/helpers/handles as helper_handle
-
-  proc testFailure() {.cps: Continuation.} =
-    fail "This code should not be run"
+  import asyncio
 
   suite "Unregistering FD from queue":
     test "Unregistering FD prevents its continuation from being run":
-      let (rd, wr) = pipe()
+      let (rd, wr) = newAsyncPipe()
       defer:
         close rd
-        close wr
 
-      # Queue testFailure() for Write on the write side of the pipe, which
-      # will be resolved to ready when the queue is run as an empty pipe
-      # is ready to be written to.
-      #
-      # We can discard this because `nil` will be returned here.
-      discard wait(whelp testFailure(), wr, Write)
+      proc tester() {.cps: Continuation.} =
+        let buf = new string
+        buf.setLen 1
+        readAsync(rd, buf)
+        fail "This code should not be run"
+
+      # Run our tester, which will be queued since the read pipe is empty
+      tester()
+
+      # Close the write side, which will unblock the pipe
+      close wr
 
       # Unregister the pipe
-      unregister wr
+      unregister rd
 
-      # Run the queue, testFailure() should not run
+      # Run the queue, the proc should not continue
       run()

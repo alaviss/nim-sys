@@ -8,23 +8,49 @@
 
 ## A mini asyncio library for testing the eventqueue.
 
-import std/posix
+when defined(posix):
+  import sys/private/syscall/posix
+  import ".."/helpers/handles as helper_handle
+else:
+  import sys/private/syscall/winim/winim except Handle
+
 import pkg/cps
 import sys/[files, handles, ioqueue]
-
-import ".."/helpers/handles as helper_handle
 
 {.experimental: "implicitDeref".}
 
 proc newAsyncPipe*(): tuple[rd, wr: ref Handle[FD]] =
-  var (rd, wr) = helper_handle.pipe()
+  when defined(posix):
+    var (rd, wr) = helper_handle.pipe()
 
-  rd.setBlocking(false)
-  wr.setBlocking(false)
+    rd.setBlocking(false)
+    wr.setBlocking(false)
 
-  result = (newHandle(rd), newHandle(wr))
+    result = (newHandle(rd), newHandle(wr))
+  else:
+    const PipeName = r"\\.\pipe\nim-sys-test"
+    let rd = CreateNamedPipeA(
+      PipeName,
+      dwOpenMode = PipeAccessInbound or
+        FileFlagFirstPipeInstance or FileFlagOverlapped,
+      dwPipeMode = PipeTypeByte or PipeWait or PipeRejectRemoteClients,
+      nMaxInstances = 1,
+      nOutBufferSize = 0,
+      nInBufferSize = 0,
+      nDefaultTimeout = 0,
+      nil
+    )
+    doAssert rd != InvalidHandleValue, "pipe creation failed"
+    let wr = CreateFileA(PipeName, GenericWrite, dwShareMode = 0, nil,
+                         OpenExisting, FileFlagOverlapped, winim.Handle(0))
+    doAssert wr != InvalidHandleValue, "pipe creation failed"
 
-proc write*[T: byte or char](fd: Handle[FD], data: openArray[T]) =
+when defined(windows):
+  {.pragma: sync, error: "not supported on this os".}
+else:
+  {.pragma: sync.}
+
+proc write*[T: byte or char](fd: Handle[FD], data: openArray[T]) {.sync.} =
   ## Write all bytes in `data` into `fd`.
   var totalWritten = 0
   while totalWritten < data.len:
@@ -35,7 +61,7 @@ proc write*[T: byte or char](fd: Handle[FD], data: openArray[T]) =
     else:
       totalWritten += written
 
-proc read*[T: byte or char](fd: Handle[FD], buf: var openArray[T]): int =
+proc read*[T: byte or char](fd: Handle[FD], buf: var openArray[T]): int {.sync.} =
   ## Read all bytes from `fd` into `buf` until it's filled or there is
   ## nothing left to read
   while result < buf.len:
@@ -55,33 +81,71 @@ proc readAsync*(rd: ref Handle[FD], buf: ref string) {.cps: Continuation.} =
   ## After finished, `buf` will be set to the length of the data received.
   ## It is done like this since our dispatcher don't provide tracking
   ## information outside of cps yet
-  var offset = 0
-  while offset < buf.len:
-    try:
-      let read = read(rd, buf.toOpenArray(offset, buf.len - 1))
-      buf.setLen offset + read
-      break
-    except files.IOError as e:
-      # Add the offset so we know where exactly we are
-      e.bytesTransferred += offset
-      if e.errorCode == EAGAIN:
-        offset = e.bytesTransferred
-        wait rd.get, Read
+  when defined(windows):
+    let overlapped = new Overlapped
+    if ReadFile(
+      winim.Handle(rd.get), addr buf[0], DWORD(buf.len), nil,
+      addr overlapped[]
+    ) == winim.FALSE:
+      let errorCode = GetLastError()
+      if errorCode == ErrorIoPending:
+        wait(rd.get, overlapped)
+      elif errorCode == ErrorHandleEof:
+        discard "it's just EOF"
       else:
-        raise e
+        raise newIOError(0, errorCode)
+    # Some long magic to make checked conversion from uint_ptr to dword possible.
+    let errorCode = DWORD(cast[uint](overlapped.Internal))
+    let read = DWORD(cast[uint](overlapped.InternalHigh))
+    if errorCode != ErrorSuccess or errorCode != ErrorHandleEof:
+      raise newIOError(read, errorCode)
+
+    buf.setLen read
+  else:
+    var offset = 0
+    while offset < buf.len:
+      try:
+        let read = read(rd, buf.toOpenArray(offset, buf.len - 1))
+        buf.setLen offset + read
+        break
+      except files.IOError as e:
+        # Add the offset so we know where exactly we are
+        e.bytesTransferred += offset
+        if e.errorCode == EAGAIN:
+          offset = e.bytesTransferred
+          wait rd.get, Read
+        else:
+          raise e
 
 proc writeAsync*(wr: ref Handle[FD], buf: string) {.cps: Continuation.} =
   ## Write all bytes in `buf` into `wr` asynchronously
-  var offset = 0
-  while offset < buf.len:
-    try:
-      write(wr, buf.toOpenArray(offset, buf.len - 1))
-      break
-    except files.IOError as e:
-      # Add the offset so we know where exactly we are
-      e.bytesTransferred += offset
-      if e.errorCode == EAGAIN:
-        offset = e.bytesTransferred
-        wait wr.get, Write
+  when defined(windows):
+    let overlapped = new Overlapped
+    if WriteFile(
+      winim.Handle(wr.get), unsafeAddr buf[0], DWORD(buf.len), nil,
+      addr overlapped[]
+    ) == winim.FALSE:
+      let errorCode = GetLastError()
+      if errorCode == ErrorIoPending:
+        wait(wr.get, overlapped)
       else:
-        raise e
+        raise newIOError(0, errorCode)
+    # Some long magic to make checked conversion from uint_ptr to dword possible.
+    let errorCode = DWORD(cast[uint](overlapped.Internal))
+    let written = DWORD(cast[uint](overlapped.InternalHigh))
+    if errorCode != ErrorSuccess:
+      raise newIOError(written, errorCode)
+  else:
+    var offset = 0
+    while offset < buf.len:
+      try:
+        write(wr, buf.toOpenArray(offset, buf.len - 1))
+        break
+      except files.IOError as e:
+        # Add the offset so we know where exactly we are
+        e.bytesTransferred += offset
+        if e.errorCode == EAGAIN:
+          offset = e.bytesTransferred
+          wait wr.get, Write
+        else:
+          raise e

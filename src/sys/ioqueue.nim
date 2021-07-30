@@ -19,24 +19,8 @@ else:
   ## supplementary for other queues implementation.
 
   import handles
-  import std/[options, times, strutils]
+  import std/[options, times]
   import pkg/cps
-
-  const
-    InitError = "Could not initialize the event queue"
-      ## Used when initialization failed.
-
-    QueueError = "Could not queue event"
-      ## Used when queuing for events failed.
-
-    PollError = "Could not poll the operating system for events"
-      ## Used when poll() failed.
-
-    QueuedFDError = "The given resource handle ($1) is already waited on"
-      ## Used when the user wait() on more than once on a given FD
-
-    UnregisterError = "Could not unregister resource from the OS"
-      ## Used when unregister() fails
 
   type
     Event* {.pure.} = enum
@@ -77,13 +61,18 @@ else:
     include private/ioqueue_linux
   elif defined(macosx) or defined(bsd):
     include private/ioqueue_bsd
+  elif defined(windows):
+    include private/ioqueue_windows
+
+    import ioqueue/iocp {.all.}
+    export iocp
   else:
     {.error: "This module has not been ported to your operating system".}
 
   type
     EventQueue = EventQueueImpl
 
-  var eq {.threadvar.}: EventQueue
+  var eq {.threadvar, used.}: EventQueue
 
   proc init() =
     ## Initializes the event queue for processing.
@@ -138,12 +127,17 @@ else:
     ## unregistered before it is closed as the semantics differs between operating
     ## system for when an FD is closed while in the queue. If such scenario is
     ## detected, `PrematureCloseDefect` will be raised.
+    ##
+    ## **Platform specific details**
+    ##
+    ## - This interface is not implemented on Windows since IOCP can be used to cover
+    ##   every use cases of this interface.
     init()
     waitEventImpl()
 
   proc wait*(c; fd: Handle[AnyFD], event: ReadyEvent): Continuation {.cpsMagic.} =
     ## An overload of `wait` for `Handle`.
-    wait(c, fd.get, event)
+    ioqueue.wait(c, fd.get, event)
 
   when not declared(unregisterImpl):
     template unregisterImpl() {.dirty.} =
@@ -154,23 +148,18 @@ else:
     ## continuation.
     ##
     ## Does nothing if the `fd` is not in the queue.
+    ##
+    ## **Platform specific details**
+    ##
+    ## - On Windows, `unregister` will abort all ongoing IO in `fd` and its
+    ##   resources will only be collected in the next `poll()` iff the
+    ##   queue is still running.
+    ##
+    ## - On Windows, `poll()` might still be interrupted by activities on `fd`
+    ##   even after unregistration since `fd` will only be detached from IOCP
+    ##   *after* it and its duplicates are closed.
     unregisterImpl()
 
   proc unregister*(fd: Handle[AnyFD]) =
     ## An overload of `unregister` for `Handle`
-    unregister(fd.get)
-
-  when not declared(waitSignalImpl):
-    template waitSignalImpl() {.dirty.} =
-      {.error: "This operation is not available for your target platform".}
-
-  proc wait*(c; obj: AnyFD): Continuation {.cpsMagic.} =
-    ## Wait for the specified `obj` to be signaled.
-    init()
-    waitSignalImpl()
-
-  proc wait*(c; obj: Handle[AnyFD]): Continuation {.cpsMagic.} =
-    ## An overload of `wait` for `Handle`.
-    wait(c, obj.get)
-
-  # TODO: wait() overload for "completion"
+    ioqueue.unregister(fd.get)
