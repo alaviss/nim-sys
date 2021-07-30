@@ -47,7 +47,7 @@ proc newAsyncPipe*(): tuple[rd, wr: ref Handle[FD]] =
     )
     doAssert wr != InvalidHandleValue, "pipe creation failed"
 
-    result = (newHandle(rd), newHandle(wr))
+    result = (newHandle(FD rd), newHandle(FD wr))
 
 when defined(windows):
   {.pragma: sync, error: "not supported on this os".}
