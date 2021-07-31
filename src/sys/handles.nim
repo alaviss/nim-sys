@@ -123,15 +123,16 @@ when false:
     ## prrocess. The parameter `inheritable` can be used to change this behavior.
     duplicateToImpl()
 
+# XXX: T should be a concept, but those don't work atm
 type
-  Handle*[T: AnyFD] {.requiresInit.} = object
+  Handle*[T] {.requiresInit.} = object
     ## An object used to associate a handle with a lifetime.
     # Walkaround for nim-lang/Nim#16607
     when true or not defined(release):
       initialized: bool
     fd: T
 
-proc close*[T: AnyFD](h: var Handle[T]) {.inline.} =
+proc close*[T](h: var Handle[T]) {.inline.} =
   ## Close the handle owned by `h` and invalidating it.
   ##
   ## If `h` is invalid, `ClosedHandleDefect` will be raised.
@@ -141,7 +142,7 @@ proc close*[T: AnyFD](h: var Handle[T]) {.inline.} =
     # Always invalidate `h.fd` to avoid double-close on destruction.
     h.fd = InvalidFD.T
 
-proc `=destroy`[T: AnyFD](h: var Handle[T]) =
+proc `=destroy`[T](h: var Handle[T]) =
   ## Destroy the file handle.
   when false:
     # TODO: Once nim-lang/Nim#16607 is fixed, make this into a debug check
@@ -154,12 +155,12 @@ proc `=destroy`[T: AnyFD](h: var Handle[T]) =
   if h.fd != InvalidFD:
     close h
 
-proc `=copy`*[T: AnyFD](dest: var Handle[T], src: Handle[T]) {.error.}
+proc `=copy`*[T](dest: var Handle[T], src: Handle[T]) {.error.}
   ## Copying a file handle is forbidden. Either a `ref Handle` should be used
   ## or `duplicate` should be used to make a handle refering to the same
   ## resource.
 
-proc initHandle*[T: AnyFD](fd: T): Handle[T] {.inline.} =
+proc initHandle*[T](fd: T): Handle[T] {.inline.} =
   ## Creates a `Handle` owning the passed `fd`. The `fd` shall then be freed
   ## automatically when the `Handle` go out of scope.
   when false:
@@ -167,7 +168,7 @@ proc initHandle*[T: AnyFD](fd: T): Handle[T] {.inline.} =
   else:
     Handle[T](initialized: true, fd: fd)
 
-proc newHandle*[T: AnyFD](fd: T): ref Handle[T] {.inline.} =
+proc newHandle*[T](fd: T): ref Handle[T] {.inline.} =
   ## Creates a `ref Handle` owning the passed `fd`. The `fd` shall then be
   ## freed automatically when the returned `ref Handle[T]` is collected by the
   ## GC.
@@ -176,7 +177,7 @@ proc newHandle*[T: AnyFD](fd: T): ref Handle[T] {.inline.} =
   else:
     (ref Handle[T])(initialized: true, fd: fd)
 
-proc get*[T: AnyFD](h: Handle[T]): T {.inline.} =
+proc get*[T](h: Handle[T]): T {.inline.} =
   ## Returns the resource handle held by `h`.
   ##
   ## The returned handle will stay valid for the duration of `h`.
@@ -185,7 +186,7 @@ proc get*[T: AnyFD](h: Handle[T]): T {.inline.} =
   ## use `take` instead.
   h.fd
 
-proc take*[T: AnyFD](h: var Handle[T]): T {.inline.} =
+proc take*[T](h: var Handle[T]): T {.inline.} =
   ## Returns the resource handle held by `h` and release ownership to the
   ## caller. `h` will then be invalidated.
   result = h.fd
