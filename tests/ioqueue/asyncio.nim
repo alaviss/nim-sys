@@ -78,7 +78,7 @@ proc read*[T: byte or char](fd: Handle[FD], buf: var openArray[T]): int {.sync.}
     else:
       result += readBytes
 
-proc readAsync*(rd: ref Handle[FD], buf: ref string) {.cps: Continuation.} =
+proc readAsync*(rd: ref Handle[FD], buf: ref string) {.asyncio.} =
   ## Read data from `rd` until `buf` is filled or there is nothing else
   ## to be read, asynchronously.
   ##
@@ -118,7 +118,7 @@ proc readAsync*(rd: ref Handle[FD], buf: ref string) {.cps: Continuation.} =
         else:
           raise e
 
-proc writeAsync*(wr: ref Handle[FD], buf: string) {.cps: Continuation.} =
+proc writeAsync*(wr: ref Handle[FD], buf: string) {.asyncio.} =
   ## Write all bytes in `buf` into `wr` asynchronously
   when defined(windows):
     let overlapped = new Overlapped

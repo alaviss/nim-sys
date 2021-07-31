@@ -12,7 +12,7 @@ when (NimMajor, NimMinor) >= (1, 5):
       defer:
         close rd
 
-      proc tester() {.cps: Continuation.} =
+      proc tester() {.asyncio.} =
         let buf = new string
         buf.setLen 1
         readAsync(rd, buf)

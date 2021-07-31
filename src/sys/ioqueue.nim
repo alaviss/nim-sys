@@ -75,6 +75,11 @@ else:
     ## Initializes the event queue for processing.
     initImpl()
 
+  template asyncio*(prc: typed): untyped =
+    ## Convenience alias to `{.cps: Continuation.}` for procedures wishing
+    ## to use ioqueue.
+    cps(Continuation, prc)
+
   proc running*(): bool =
     ## Whether there are any continuations within the queue
     runningImpl()
