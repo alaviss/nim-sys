@@ -14,9 +14,7 @@ type
 
 template cleanupFile(f: untyped) =
   when f is AsyncFileImpl or f is AsyncFile:
-    # XXX: `!=` doesn't work here, probably a compiler bug
-    if not (f.handle.get == InvalidFD):
-      unregister AsyncFD f.handle.get
+    unregister f.handle
 
 template closeImpl() {.dirty.} =
   cleanupFile f
@@ -31,8 +29,6 @@ template newFileImpl() {.dirty.} =
 
 template newAsyncFileImpl() {.dirty.} =
   result = AsyncFile newFile(fd)
-  if result.handle.get != InvalidFD:
-    register result.handle.get.AsyncFD
 
 template getFDImpl() {.dirty.} =
   result = get f.handle
@@ -41,79 +37,79 @@ template takeFDImpl() {.dirty.} =
   cleanupFile f
   result = take f.handle
 
-template readImpl() {.dirty.} =
-  while result < b.len:
-    let bytesRead = read(f.handle.get.cint, addr b[result],
-                         b.len - result)
+template commonReadImpl(result: var int, fd: cint, buf: ptr UncheckedArray[byte],
+                        bufLen: Natural, onNonBlock: untyped) =
+  # While the buffer is not filled
+  while result < bufLen:
+    # Read more into it
+    let bytesRead = read(fd, addr buf[result], bufLen - result)
+    # If more than 0 bytes is read
     if bytesRead > 0:
+      # Add it to the total bytes read and do it again
       result.inc bytesRead
+
+    # If none is read, then the buffer reached EOF, return
     elif bytesRead == 0:
       break
-    elif errno != EINTR and errno != EAGAIN:
+
+    # If there is an error but it's not due to a signal interruption
+    elif errno != EINTR:
+      # On the event that the FD is non-blocking and is exhausted
+      if errno == EAGAIN or errno == EWOULDBLOCK:
+        # Run user's code
+        onNonBlock
+
+      # Raise an error if not interrupted
       raise newIOError(result, errno, ErrorRead)
 
+template readImpl() {.dirty.} =
+  commonReadImpl(result, cint(f.fd),
+                 cast[ptr UncheckedArray[byte]](addr b[0]), b.len):
+    discard "blocking read on non-blocking file is a bug"
+
 template asyncReadImpl() {.dirty.} =
-  assert b != nil, "The provided buffer is nil"
+  commonReadImpl(result, cint(f.fd), buf, bufLen):
+    # Queue a wait on the event that the FD is exhausted.
+    wait f.fd, Read
+    # Move to the next iteration so that the `raise` won't trigger.
+    continue
 
-  result = newFuture[int]("files.read")
-
-  let future = result
-  var totalRead = 0
-
-  proc doRead(fd: AsyncFD): bool =
-    while totalRead < b.len:
-      let bytesRead = read(fd.cint, addr b[totalRead], b.len - totalRead)
-      if bytesRead > 0:
-        totalRead.inc bytesRead
-      elif bytesRead == 0:
-        break
-      elif errno == EAGAIN or errno == EINTR:
-        return false
-      else:
-        future.fail newIOError(totalRead, errno, ErrorRead)
-        break
-
-    result = true
-    if not future.finished:
-      future.complete totalRead
-
-  if not f.handle.get.AsyncFD.doRead():
-    f.handle.get.AsyncFD.addRead doRead
-
-template writeImpl() {.dirty.} =
+template commonWriteImpl(fd: cint, buf: ptr UncheckedArray[byte],
+                         bufLen: Natural, onNonBlock: untyped) =
   var totalWritten = 0
-  while totalWritten < b.len:
-    let bytesWritten = write(f.handle.get.cint, unsafeAddr b[totalWritten],
-                             b.len - totalWritten)
+  # While the entire buffer is not written
+  while totalWritten < bufLen:
+    # Write it to `f`
+    let bytesWritten = write(fd, addr buf[totalWritten],
+                             bufLen - totalWritten)
+    # If we managed to write some bytes
     if bytesWritten > 0:
+      # Add it to the total
       totalWritten.inc bytesWritten
+
     elif bytesWritten == 0:
+      # On POSIX, a non-zero write will never yield 0 as a result, so this
+      # is a form of sanity check.
       doAssert false, "write() returned zero for non-zero request"
-    elif errno != EINTR and errno != EAGAIN:
+
+    # If there is an error that's not due to signal interruption
+    elif errno != EINTR:
+      # On the event that the FD is non-blocking and is exhausted
+      if errno == EAGAIN or errno == EWOULDBLOCK:
+        # Run user's code
+        onNonBlock
+
+      # Raise an error if not interrupted
       raise newIOError(totalWritten, errno, ErrorWrite)
 
+template writeImpl() {.dirty.} =
+  commonWriteImpl(cint(f.fd), cast[ptr UncheckedArray[byte]](unsafeAddr b[0]),
+                  b.len):
+    discard "blocking write on non-blocking file is a bug"
+
 template asyncWriteImpl() {.dirty.} =
-  result = newFuture[void]("files.write")
-  let future = result
-  var totalWritten = 0
-
-  proc doWrite(fd: AsyncFD): bool =
-    while totalWritten < b.len:
-      let bytesWritten = write(fd.cint, unsafeAddr b[totalWritten],
-                               b.len - totalWritten)
-      if bytesWritten > 0:
-        totalWritten.inc bytesWritten
-      elif bytesWritten == 0:
-        doAssert false, "write() returned zero for non-zero request"
-      elif errno == EAGAIN or errno == EINTR:
-        return false
-      else:
-        future.fail newIOError(totalWritten, errno, ErrorWrite)
-        break
-
-    result = true
-    if not future.finished:
-      complete future
-
-  if not f.handle.get.AsyncFD.doWrite():
-    f.handle.get.AsyncFD.addWrite doWrite
+  commonWriteImpl(cint(f.fd), buf, bufLen):
+    # Queue a wait on the event that the FD is exhausted.
+    wait f.fd, Write
+    # Move to the next iteration so that the `raise` won't trigger.
+    continue

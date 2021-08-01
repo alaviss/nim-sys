@@ -9,8 +9,7 @@
 {.experimental: "implicitDeref".}
 
 import system except io
-import std/asyncdispatch
-import handles
+import handles, ioqueue
 import private/errors
 
 const
@@ -26,9 +25,6 @@ elif defined(windows):
   include private/files_windows
 else:
   {.error: "This module has not been ported to your operating system.".}
-
-when (defined(gcArc) or defined(gcOrc)) and (NimMajor, NimMinor) < (1, 5):
-  {.warning: "Async types are not supported on Nim < 1.5 due to nim-lang/Nim#18214".}
 
 type
   File* = ref FileImpl
@@ -78,6 +74,9 @@ proc close*(f: AnyFile) =
   ## Closes and invalidates the file `f`.
   ##
   ## If `f` is invalid, `ClosedHandleDefect` will be raised.
+  ##
+  ## If `f` is a AsyncFile, it will be deregistered from the queue before
+  ## closing.
   closeImpl()
 
 when declared(destroyFileImpl):
@@ -102,13 +101,12 @@ proc newFile*(fd: FD): File =
   ## The ownership of the file handle will be transferred to the resulting
   ## `ref File`.
   ##
-  ## **Note**: Only use this interface if you know what you are doing.
+  ## **Note**: It is assumed that the file handle has been opened in
+  ## synchronous mode. Only use this interface if you know what you are doing.
   newFileImpl()
 
 proc newAsyncFile*(fd: FD): AsyncFile =
   ## Creates a new `ref AsyncFile` object from an opened file handle.
-  ##
-  ## On POSIX systems, `fd` will be registered with the global dispatcher.
   ##
   ## The ownership of the file handle will be transferred to the resulting
   ## `ref AsyncFile`.
@@ -138,7 +136,7 @@ proc takeFD*(f: AnyFile): FD {.inline.} =
 
 proc read*[T: byte or char](f: File, b: var openArray[T]): int
                            {.raises: [IOError].} =
-  ## Reads `b.len` bytes from file `f` into `b`. Data may be written
+  ## Reads `b.len` bytes from file `f` into `b`. Data might be written
   ## into `b` even when an error occurs. The IOError thrown will contain
   ## the number of bytes read thus far.
   ##
@@ -154,14 +152,23 @@ proc read*[T: byte or char](f: File, b: var openArray[T]): int
   ## This function is not thread-safe.
   ##
   ## Returns the number of bytes read from `f`.
+  ##
+  ## **Platform specific details**
+  ##
+  ## - On POSIX systems, signals will not interrupt the operation.
   readImpl()
 
-proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
-  ## Reads `b.len` bytes from file `f` into `b`. Data may be written
-  ## into `b` even when an error occurs. The IOError thrown will contain
+proc read*(f: AsyncFile, buf: ptr UncheckedArray[byte],
+           bufLen: Natural): int {.asyncio.} =
+  ## Reads `bufLen` bytes from file `f` into `buf`. Data might be written
+  ## into `buf` even when an error occurs. The IOError thrown will contain
   ## the number of bytes read thus far.
   ##
-  ## This function will read until `b` is filled or the end-of-file has
+  ## `buf` must stays alive for the duration of the read. Direct usage of this
+  ## interface is discouraged due to its unsafetyness. Users are encouraged to
+  ## use the high-level overloads that keep the buffers alive.
+  ##
+  ## This function will read until `bufLen` is reached or the end-of-file has
   ## been reached.
   ##
   ## If the file position is at the end-of-file, no data will be read and
@@ -170,8 +177,7 @@ proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
   ## If `f` is a pipe and the write end has been closed, no data will be read
   ## and no error will be raised.
   ##
-  ## This function is not thread-safe, and the ordering of two concurrent async
-  ## operations on the same file is undefined.
+  ## This function is not thread-safe.
   ##
   ## Returns the number of bytes read from `f`.
   ##
@@ -189,20 +195,53 @@ proc read*[T: string or seq[byte]](f: AsyncFile, b: ref T): Future[int] =
   ##   from Microsoft for more details. If asynchronous disk operations are
   ##   required, it is recommended to use `File` with threads.
   ##
+  ## - On POSIX systems, signals will not interrupt the operation.
+  ##
   ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
+  assert(not buf.isNil, "The provided buffer must not be nil")
   asyncReadImpl()
 
+proc read*(f: AsyncFile, b: ref string): int {.asyncio.} =
+  ## Reads `b.len` bytes from file `f` into `b`.
+  ##
+  ## This is an overload of
+  ## `read() <#read,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please refer
+  ## to its documentation for more information.
+  assert(not b.isNil, "The provided buffer must not be nil")
+  read(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+
+proc read*(f: AsyncFile, b: ref seq[byte]): int {.asyncio.} =
+  ## Reads `b.len` bytes from file `f` into `b`.
+  ##
+  ## This is an overload of
+  ## `read() <#read,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please refer
+  ## to its documentation for more information.
+  assert(not b.isNil, "The provided buffer must not be nil")
+  read(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+
 proc write*[T: byte or char](f: File, b: openArray[T]) {.raises: [IOError].} =
-  ## Writes the contents of array `b` into file `f`.
+  ## Writes the contents of array `b` into file `f`. Data might be written to
+  ## `f` even when an error occurs. The IOError thrown will contain the number
+  ## of bytes written thus far.
   ##
   ## This function is not thread-safe.
+  ##
+  ## **Platform specific details**
+  ##
+  ## - On POSIX systems, signals will not interrupt the operation.
   writeImpl()
 
-proc write*[T: string or seq[byte]](f: AsyncFile, b: T): Future[void] =
-  ## Writes the contents of array `b` into file `f`.
+proc write*(f: AsyncFile, buf: ptr UncheckedArray[byte],
+            bufLen: Natural) {.asyncio.} =
+  ## Writes `bufLen` bytes from the buffer pointed to by `buf` to `f`. Data
+  ## might be written to `f` even when an error occurs. The IOError thrown will
+  ## contain the number of bytes written thus far.
   ##
-  ## This function is not thread-safe, and the ordering of two concurrent async
-  ## operations on the same file is undefined.
+  ## `buf` must stays alive for the duration of the read. Direct usage of this
+  ## interface is discouraged due to its unsafetyness. Users are encouraged to
+  ## use the high-level overloads that keep the buffers alive.
+  ##
+  ## This function is not thread-safe.
   ##
   ## **Platform specific details**
   ##
@@ -218,5 +257,44 @@ proc write*[T: string or seq[byte]](f: AsyncFile, b: T): Future[void] =
   ##   from Microsoft for more details. If asynchronous disk operations are
   ##   required, it is recommended to use `File` with threads.
   ##
+  ## - On POSIX systems, signals will not interrupt the operation.
+  ##
   ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
+  assert(not buf.isNil, "The provided buffer must not be nil")
   asyncWriteImpl()
+
+proc write*(f: AsyncFile, b: string) {.asyncio.} =
+  ## Writes the contents of array `b` into file `f`. The contents of `b` will
+  ## be copied. Consider the `ref` overload to avoid copies.
+  ##
+  ## This is an overload of
+  ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
+  ## refer to its documentation for more information.
+  write(f, cast[ptr UncheckedArray[byte]](unsafeAddr b[0]), b.len)
+
+proc write*(f: AsyncFile, b: ref string) {.asyncio.} =
+  ## Writes the contents of array `b` into file `f`.
+  ##
+  ## This is an overload of
+  ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
+  ## refer to its documentation for more information.
+  assert(not b.isNil, "The provided buffer must not be nil")
+  write(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+
+proc write*(f: AsyncFile, b: seq[byte]) {.asyncio.} =
+  ## Writes the contents of array `b` into file `f`. The contents of `b` will
+  ## be copied. Consider the `ref` overload to avoid copies.
+  ##
+  ## This is an overload of
+  ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
+  ## refer to its documentation for more information.
+  write(f, cast[ptr UncheckedArray[byte]](unsafeAddr b[0]), b.len)
+
+proc write*(f: AsyncFile, b: ref seq[byte]) {.asyncio.} =
+  ## Writes the contents of array `b` into file `f`.
+  ##
+  ## This is an overload of
+  ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
+  ## refer to its documentation for more information.
+  assert(not b.isNil, "The provided buffer must not be nil")
+  write(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
