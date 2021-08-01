@@ -9,7 +9,7 @@
 ## Abstractions for operating system pipes and FIFOs (named pipes).
 
 import system except File
-import std/[asyncdispatch, typetraits]
+import std/typetraits
 import files
 
 const
@@ -128,11 +128,20 @@ template read*[T: byte or char](rp: ReadPipe, b: var openArray[T]): int =
   ## symbol's documentation for more details.
   read distinctBase(typeof rp) rp, b
 
-template read*[T: string or seq[byte]](rp: AsyncReadPipe, b: ref T): Future[int] =
+template read*(rp: AsyncReadPipe, buf: ptr UncheckedArray[byte],
+               bufLen: Natural): int =
+  ## Read `bufLen` bytes from pipe `rp` into `buf`.
+  ##
+  ## This procedure is borrowed from
+  ## `files.read() <files.html#read,AsyncFile,ptr.UncheckedArray[byte],Natural>`_.
+  ## See the borrowed symbol's documentation for more details.
+  read distinctBase(typeof rp) rp, buf, bufLen
+
+template read*[T: string or seq[byte]](rp: AsyncReadPipe, b: ref T): int =
   ## Read `b.len` bytes from pipe `rp` into `b`.
   ##
   ## This procedure is borrowed from
-  ## `files.read() <files.html#read,AsyncFile,ref.T>`_. See the borrowed
+  ## `files.read() <files.html#read,AsyncFile,ref.string>`_. See the borrowed
   ## symbol's documentation for more details.
   read distinctBase(typeof rp) rp, b
 
@@ -144,11 +153,28 @@ template write*[T: byte or char](wp: WritePipe, b: openArray[T]) =
   ## symbol's documentation for more details.
   write distinctBase(typeof wp) wp, b
 
-template write*[T: string or seq[byte]](wp: AsyncWritePipe,
-                                        b: T): Future[void] =
+template write*(wp: AsyncWritePipe, buf: ptr UncheckedArray[byte],
+                bufLen: Natural) =
+  ## Writes `bufLen` bytes from the buffer pointed to by `buf` into the pipe
+  ## `wp`.
+  ##
+  ## This procedure is borrowed from
+  ## `files.write() <files.html#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_.
+  ## See the borrowed symbol's documentation for more details.
+  write distinctBase(typeof wp) wp, buf, bufLen
+
+template write*[T: string or seq[byte]](wp: AsyncWritePipe, b: T) =
+  ## Writes the contents of array `b` into the pipe `wp`. `b` will be copied.
+  ##
+  ## This procedure is borrowed from
+  ## `files.write() <files.html#write,AsyncFile,string>`_. See the borrowed
+  ## symbol's documentation for more details.
+  write distinctBase(typeof wp) wp, b
+
+template write*[T: string or seq[byte]](wp: AsyncWritePipe, b: ref T) =
   ## Writes the contents of array `b` into the pipe `wp`.
   ##
   ## This procedure is borrowed from
-  ## `files.write() <files.html#write,AsyncFile,T>`_. See the borrowed symbol's
-  ## documentation for more details.
+  ## `files.write() <files.html#write,AsyncFile,ref.string>`_. See the borrowed
+  ## symbol's documentation for more details.
   write distinctBase(typeof wp) wp, b

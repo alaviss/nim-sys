@@ -6,7 +6,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        branch: [version-1-4, devel]
+        branch: [devel]
         target: [linux, macos, windows]
         arch: [i386, amd64]
         include:
@@ -78,7 +78,7 @@ jobs:
         run: |
           branch=${{ github.ref }}
           branch=${branch##*/}
-          for i in src/sys/*.nim; do
+          for i in src/sys/*.nim src/sys/ioqueue/*.nim; do
             nimble doc --project --outdir:htmldocs \
               '--git.url:https://github.com/${{ github.repository }}' \
               '--git.commit:${{ github.sha }}' \
