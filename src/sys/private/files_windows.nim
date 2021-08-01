@@ -128,14 +128,8 @@ template commonReadImpl(result: var int, fd: FD,
         break
       else:
         raise newIOError(result, errorCode, ErrorRead)
-    elif bytesRead < high(DWORD):
-      # As ReadFile() only return true when either EOF happened or all
-      # requested bytes has been read, if the amount of bytes read did not
-      # reach the upper boundary (which would signify a broken down
-      # operation), there is no need for retries.
-      break
-    else:
-      doAssert false, "unreachable!"
+    elif bytesRead == 0:
+      break # EOF reached.
 
 template readImpl() {.dirty.} =
   commonReadImpl(result, f.fd, cast[ptr UncheckedArray[byte]](addr b[0]),
@@ -195,16 +189,6 @@ template commonWriteImpl(fd: FD, buf: ptr UncheckedArray[byte], bufLen: Natural,
 
     if errorCode != ErrorSuccess:
       raise newIOError(totalWritten, errorCode, ErrorWrite)
-    elif bytesWritten < high(DWORD):
-      # See readImpl() for the rationale. Though, in the case of writes,
-      # it is possible for a successful operation to write less than
-      # the requested amount, if the handle in question is a PIPE_NOWAIT
-      # pipe handle, but that type of handle has been deprecated a long time
-      # ago.
-      doAssert bufLen == totalWritten, "not all of the provided buffer has been written"
-      break
-    else:
-      doAssert false, "unreachable!"
 
 template writeImpl() {.dirty.} =
   commonWriteImpl(f.fd, cast[ptr UncheckedArray[byte]](unsafeAddr b[0]), b.len,
