@@ -9,6 +9,18 @@
 import std/strutils
 import sys/ioqueue
 
+const Delimiter* = "\c\l\c\l"
+  # The HTTP delimiter
+
+let
+  TestBufferedData* = "!@#$%^TEST%$#@!\n".repeat(2_000_000)
+    ## A decently sized buffer that surpasses most OS pipe buffer size, which
+    ## is usually in the range of 4-8MiB.
+    ##
+    ## Declared as a `let` to avoid binary size being inflated by the inlining.
+  TestDelimitedData* = TestBufferedData & Delimiter
+    ## The buffer used to test delimited reads.
+
 proc accumlatedRead*[T](readable: T, size: Natural): string =
   ## Read until a buffer of `size` is reached or EOF is received.
   ##

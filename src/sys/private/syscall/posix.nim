@@ -24,6 +24,8 @@ when defined(bsd) or defined(linux) or defined(macosx):
   let FIONCLEX* {.importc, header: "<sys/ioctl.h>".}: culong
 
 when defined(bsd) or defined(linux):
+  let SOCK_NONBLOCK* {.importc, header: "<sys/socket.h>".}: cint
+
   proc dup3*(oldfd, newfd, flags: cint): cint {.importc, header: "<unistd.h>".}
   proc pipe2*(pipefd: var array[2, cint],
               flags: cint): cint {.importc, header: "<unistd.h>".}

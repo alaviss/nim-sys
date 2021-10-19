@@ -157,6 +157,7 @@ template waitEventImpl() {.dirty.} =
 
 template unregisterImpl() {.dirty.} =
   if not eq.initialized: return
+  let fd = fd.FD # Converts the `fd` parameter to `FD`
 
   # If the FD is in the waiter list
   if fd in eq.waiters:
