@@ -37,79 +37,64 @@ template takeFDImpl() {.dirty.} =
   cleanupFile f
   result = take f.handle
 
-template commonReadImpl(result: var int, fd: cint, buf: ptr UncheckedArray[byte],
-                        bufLen: Natural, onNonBlock: untyped) =
-  # While the buffer is not filled
-  while result < bufLen:
-    # Read more into it
-    let bytesRead = read(fd, addr buf[result], bufLen - result)
-    # If more than 0 bytes is read
-    if bytesRead > 0:
-      # Add it to the total bytes read and do it again
-      result.inc bytesRead
-
-    # If none is read, then the buffer reached EOF, return
-    elif bytesRead == 0:
-      break
-
-    # If there is an error but it's not due to a signal interruption
-    elif errno != EINTR:
-      # On the event that the FD is non-blocking and is exhausted
-      if errno == EAGAIN or errno == EWOULDBLOCK:
-        # Run user's code
-        onNonBlock
-
-      # Raise an error if not interrupted
-      raise newIOError(result, errno, ErrorRead)
+proc commonRead(fd: FD, buf: pointer, len: Natural): int {.inline.} =
+  ## A wrapper around posix.read() to retry on EINTR.
+  result = retryOnEIntr: read(cint(fd), buf, len)
 
 template readImpl() {.dirty.} =
-  commonReadImpl(result, cint(f.fd),
-                 cast[ptr UncheckedArray[byte]](addr b[0]), b.len):
-    discard "blocking read on non-blocking file is a bug"
+  let bytesRead = commonRead(f.fd, addr b[0], b.len)
+
+  # In case of an error, raise
+  if bytesRead == -1:
+    raise newIOError(0, errno, ErrorRead)
+
+  result = bytesRead
 
 template asyncReadImpl() {.dirty.} =
-  commonReadImpl(result, cint(f.fd), buf, bufLen):
-    # Queue a wait on the event that the FD is exhausted.
-    wait f.fd, Read
-    # Move to the next iteration so that the `raise` won't trigger.
-    continue
+  while true:
+    let bytesRead = commonRead(f.fd, buf, bufLen)
 
-template commonWriteImpl(fd: cint, buf: ptr UncheckedArray[byte],
-                         bufLen: Natural, onNonBlock: untyped) =
-  var totalWritten = 0
-  # While the entire buffer is not written
-  while totalWritten < bufLen:
-    # Write it to `f`
-    let bytesWritten = write(fd, addr buf[totalWritten],
-                             bufLen - totalWritten)
-    # If we managed to write some bytes
-    if bytesWritten > 0:
-      # Add it to the total
-      totalWritten.inc bytesWritten
-
-    elif bytesWritten == 0:
-      # On POSIX, a non-zero write will never yield 0 as a result, so this
-      # is a form of sanity check.
-      doAssert false, "write() returned zero for non-zero request"
-
-    # If there is an error that's not due to signal interruption
-    elif errno != EINTR:
-      # On the event that the FD is non-blocking and is exhausted
+    # In case of an error
+    if bytesRead == -1:
+      # If the operation can not be done now
       if errno == EAGAIN or errno == EWOULDBLOCK:
-        # Run user's code
-        onNonBlock
+        # Wait until it can be done and try again.
+        wait f.fd, Read
 
-      # Raise an error if not interrupted
-      raise newIOError(totalWritten, errno, ErrorWrite)
+      else:
+        raise newIOError(0, errno, ErrorRead)
+
+    # Otherwise the operation is completed
+    else:
+      return bytesRead
+
+proc commonWrite(fd: FD, buf: pointer, len: Natural): int {.inline.} =
+  ## A wrapper around posix.write() to retry on EINTR.
+  result = retryOnEIntr: write(cint(fd), buf, len)
 
 template writeImpl() {.dirty.} =
-  commonWriteImpl(cint(f.fd), cast[ptr UncheckedArray[byte]](unsafeAddr b[0]),
-                  b.len):
-    discard "blocking write on non-blocking file is a bug"
+  let bytesWritten = commonWrite(f.fd, unsafeAddr b[0], b.len)
+
+  # In case of an error, raise
+  if bytesWritten == -1:
+    raise newIOError(0, errno, ErrorWrite)
+
+  result = bytesWritten
 
 template asyncWriteImpl() {.dirty.} =
-  commonWriteImpl(cint(f.fd), buf, bufLen):
-    # Queue a wait on the event that the FD is exhausted.
-    wait f.fd, Write
-    # Move to the next iteration so that the `raise` won't trigger.
-    continue
+  while true:
+    let bytesWritten = commonWrite(f.fd, buf, bufLen)
+
+    # In case of an error
+    if bytesWritten == -1:
+      # If the operation can not be done now
+      if errno == EAGAIN or errno == EWOULDBLOCK:
+        # Wait until it can be done and try again.
+        wait f.fd, Write
+
+      else:
+        raise newIOError(0, errno, ErrorWrite)
+
+    # Otherwise the operation is completed
+    else:
+      return bytesWritten
