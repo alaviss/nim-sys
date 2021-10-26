@@ -82,7 +82,8 @@ template handleReadResult(errorCode, bytesRead: DWORD) =
   ## Raises if the result is considered an error.
   # In case of a broken pipe (write side closed), treat it as EOF
   if errorCode != ErrorSuccess:
-    if errorCode == ErrorBrokenPipe or errorCode == ErrorHandleEof:
+    case errorCode
+    of ErrorBrokenPipe, ErrorHandleEof, ErrorNoMoreItems:
       discard "EOF reached"
     else:
       raise newIOError(bytesRead, errorCode, ErrorRead)
@@ -104,10 +105,15 @@ template asyncReadImpl() {.dirty.} =
   # Prepare the OVERLAPPED structure
   f.File.initOverlapped(overlapped[])
 
-  var errorCode: DWORD = ErrorSuccess
+  var
+    errorCode: DWORD = ErrorSuccess
+    bytesRead: DWORD
 
+  # In the case where the operation finishes synchronously, the result from
+  # `lpNumberOfBytesRead` parameter is correct. This saves us from having to
+  # call GetOverlappedResult when an operation finishes immediately.
   if ReadFile(
-    wincore.Handle(f.fd), buf, ioSize(bufLen), nil,
+    wincore.Handle(f.fd), buf, ioSize(bufLen), addr bytesRead,
     cast[ptr Overlapped](addr overlapped[])
   ) == wincore.FALSE:
     errorCode = GetLastError()
@@ -117,9 +123,18 @@ template asyncReadImpl() {.dirty.} =
     # Wait for it to finish
     wait(f.fd, overlapped)
 
-  # Get the result data from the overlapped object
-  errorCode = DWORD overlapped.Internal
-  let bytesRead = DWORD overlapped.InternalHigh
+    # Get the result data from the overlapped object
+    #
+    # GetOverlappedResult will not block if the overlapped operation has
+    # completed (see documentation for the `bWait` parameter).
+    errorCode =
+      if GetOverlappedResult(
+        wincore.Handle(f.fd), cast[ptr Overlapped](addr overlapped[]),
+        addr bytesRead, bWait = wincore.FALSE
+      ) == wincore.FALSE:
+        GetLastError()
+      else:
+        ErrorSuccess
 
   # If `f` is seekable
   if f.seekable:
@@ -146,10 +161,15 @@ template asyncWriteImpl() {.dirty.} =
   # Prepare the OVERLAPPED structure
   f.File.initOverlapped(overlapped[])
 
-  var errorCode: DWORD = ErrorSuccess
+  var
+    errorCode: DWORD = ErrorSuccess
+    bytesWritten: DWORD
 
+  # In the case where the operation finishes synchronously, the result from
+  # `lpNumberOfBytesWritten` parameter is correct. This saves us from having to
+  # call GetOverlappedResult when an operation finishes immediately.
   if WriteFile(
-    wincore.Handle(f.fd), buf, ioSize(bufLen), nil,
+    wincore.Handle(f.fd), buf, ioSize(bufLen), addr bytesWritten,
     cast[ptr Overlapped](addr overlapped[])
   ) == wincore.FALSE:
     errorCode = GetLastError()
@@ -159,9 +179,18 @@ template asyncWriteImpl() {.dirty.} =
     # Wait for it to finish
     wait(f.fd, overlapped)
 
-  # Get the result data from the overlapped object
-  errorCode = DWORD overlapped.Internal
-  let bytesWritten = DWORD overlapped.InternalHigh
+    # Get the result data from the overlapped object
+    #
+    # GetOverlappedResult will not block if the overlapped operation has
+    # completed (see documentation for the `bWait` parameter).
+    errorCode =
+      if GetOverlappedResult(
+        wincore.Handle(f.fd), cast[ptr Overlapped](addr overlapped[]),
+        addr bytesWritten, bWait = wincore.FALSE
+      ) == wincore.FALSE:
+        GetLastError()
+      else:
+        ErrorSuccess
 
   # If `f` is seekable
   if f.seekable:
@@ -170,6 +199,6 @@ template asyncWriteImpl() {.dirty.} =
 
   # If the operation failed, raise
   if errorCode != ErrorSuccess:
-    raise newIOError(bytesWritten, errorCode, ErrorRead)
+    raise newIOError(bytesWritten, errorCode, ErrorWrite)
 
   result = bytesWritten
