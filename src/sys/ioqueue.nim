@@ -49,7 +49,7 @@ type
 func newPrematureCloseDefect*(id: int): ref PrematureCloseDefect =
   ## Creates a `PrematureCloseDefect`
   result = newException(PrematureCloseDefect):
-    "Resource id " & $id & " was invalidated before its waiter could execute"
+    "Resource id " & $id & " was invalidated before its unregistered"
   result.id = id
 
 when defined(linux):
@@ -60,7 +60,7 @@ elif defined(windows):
   include private/ioqueue_windows
 
   import ioqueue/iocp {.all.}
-  export iocp except init, running, unregister, poll
+  export iocp except init, running, unregister, poll, persist
 else:
   {.error: "This module has not been ported to your operating system".}
 
@@ -107,6 +107,37 @@ proc run*() =
     # Run until the list is empty.
     while runnable.len > 0:
       discard trampoline runnable.pop()
+
+when not declared(persistImpl):
+  template persistImpl() {.dirty.} =
+    {.error: "This operation is not available for your target platform".}
+
+proc persist*(fd: AnyFD) =
+  ## Mark `fd` as a long-term event producer.
+  ##
+  ## This allows the queue to skip registration of the `fd` with the OS in
+  ## subsequent waits and might provide a sizable speed up.
+  ##
+  ## However, this means `poll()` will always return when an event occurs on
+  ## `fd` even if it is not being waited on and might degrade performance.
+  ##
+  ## Deassociation can be done via `unregister() <#unregister,AnyFD>_`.
+  ##
+  ## **Note**: Any FD marked as persistent must be unregistered before
+  ## closing, even on Windows. Failure to do so will raise a `Defect`.
+  ## This error checking will only happen on non-release builds.
+  ##
+  ## Currently this is only implemented for Windows.
+  ##
+  ## ** Platform specific details **
+  ##
+  ## - On Windows, `fd` is permanently bound to the queue for the duration of
+  ##   its lifetime and cannot be unbound via `unregister()`, which also
+  ##   prevents it from being bound to any other queue.
+  ##
+  ## - On Windows, `fd` is set to skip posting a packet to IOCP if the
+  ##   operation is finished synchronously.
+  persistImpl()
 
 using c: Continuation
 

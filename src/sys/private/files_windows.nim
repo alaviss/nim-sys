@@ -109,6 +109,9 @@ template asyncReadImpl() {.dirty.} =
     errorCode: DWORD = ErrorSuccess
     bytesRead: DWORD
 
+  # Register the FD as persistent. This is required for IOCP operations.
+  persist(f.fd)
+
   # In the case where the operation finishes synchronously, the result from
   # `lpNumberOfBytesRead` parameter is correct. This saves us from having to
   # call GetOverlappedResult when an operation finishes immediately.
@@ -164,6 +167,9 @@ template asyncWriteImpl() {.dirty.} =
   var
     errorCode: DWORD = ErrorSuccess
     bytesWritten: DWORD
+
+  # Register the FD as persistent. This is required for IOCP operations.
+  persist(f.fd)
 
   # In the case where the operation finishes synchronously, the result from
   # `lpNumberOfBytesWritten` parameter is correct. This saves us from having to

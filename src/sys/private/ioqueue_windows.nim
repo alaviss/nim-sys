@@ -18,5 +18,8 @@ template runningImpl(): bool {.dirty.} =
 template pollImpl() {.dirty.} =
   iocp.poll(runnable, timeout)
 
+template persistImpl() {.dirty.} =
+  iocp.persist(fd)
+
 template unregisterImpl() {.dirty.} =
   iocp.unregister(fd)

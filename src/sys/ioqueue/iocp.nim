@@ -39,9 +39,24 @@ type
       ## signified cancellation.
       eventBuffer: seq[OverlappedEntry] ##
       ## A persistent buffer for receiving events from the kernel.
-      registered: PackedSet[FD] ## A set of registered FDs.
+      registered: PackedSet[FD] ## The set of registered FDs.
+      orphans: PackedSet[FD] ## The set of FDs that has been unregistered.
     of false:
       discard
+
+  UnregisteredHandleDefect* = object of Defect
+    ## A `wait(fd, overlapped)` was attempted before the fd is registered.
+    ##
+    ## If an operation is done before the fd is registered into the queue,
+    ## the queue might not receive the completion result, causing spontaneous
+    ## hangs.
+    ##
+    ## To avoid this, make sure that the fd is registered before performing
+    ## any overlapped operation.
+
+proc newUnregisteredHandleDefect*(): ref UnregisteredHandleDefect =
+  newException(UnregisteredHandleDefect):
+    "A resource handle was waited for completion before it was registered into the queue."
 
 var eq {.threadvar.}: EventQueue
 
@@ -123,21 +138,65 @@ proc poll(runnable: var seq[Continuation], timeout = none(Duration)) {.used.} =
       runnable.add eq.waiters[fd].cont
       eq.waiters.del fd
 
+proc persist(fd: AnyFD) {.raises: [OSError].} =
+  ## See the documentation of `ioqueue.persist()`
+  bind init
+  init()
+
+  # Skip the registation check via IOCP on release build as an optimization.
+  when defined(release):
+    if fd in eq.registered:
+      return
+
+  # Register the handle with IOCP
+  if CreateIoCompletionPort(
+    wincore.Handle(fd), wincore.Handle(eq.iocp.get), ULongPtr(fd), 0
+  ) == wincore.Handle(0):
+    let errorCode = GetLastError()
+
+    # If an FD is already registered into IOCP
+    if errorCode == ErrorInvalidParameter and (fd in eq.registered or fd in eq.orphans):
+      discard "already registered"
+    else:
+      raise newOSError(errorCode, $Error.Register)
+
+  # If registration success but fd is already registered and was not unregistered
+  elif fd in eq.registered:
+    # TODO: Find a way to make PrematureCloseDefect accessible from this module...
+    raise newException(Defect):
+      "Resource id " & $fd.int & " was invalidated before its unregistered"
+
+  # This is the first registration
+  else:
+    # Set its completion mode to not queue a completion packet on success
+    #
+    # This only has to be done once
+    if SetFileCompletionNotificationModes(
+      wincore.Handle(fd), FileSkipCompletionPortOnSuccess
+    ) == wincore.FALSE:
+      raise newOSError(GetLastError(), $Error.Register)
+
+  # Add FD to the registered set
+  eq.registered.incl fd
+
+  # Remove FD from the orphans set
+  eq.orphans.excl fd
+
 using c: Continuation
 
 proc wait*(c; fd: AnyFD, overlapped: ref Overlapped): Continuation {.cpsMagic.} =
   ## Wait for the operation associated with `overlapped` to finish.
   ##
-  ## Only one continuation can be queued for any given `fd` per thread. If more
-  ## than one is queued, ValueError will be raised. This limitation is temporary
-  ## and will be lifted in the future.
+  ## The `fd` must be registered via `persist()` with the queue before the
+  ## operation associated with `overlapped` is done or there will be a high
+  ## chance that the event will never arrive. A limited form of sanity check is
+  ## available via `UnregisteredHandleDefect`.
+  ##
+  ## Only one continuation can be queued for any given `fd`. If more than one
+  ## is queued, ValueError will be raised. This limitation might be lifted in
+  ## the future.
   ##
   ## **Notes**:
-  ## - The `fd` passed will be registered into IOCP and will cause interrupts
-  ##   even if `wait` is not used for further usage of the `fd`. Therefore it is
-  ##   advised to only use this procedure if all overlapped operations on this
-  ##   `fd` will be done via the queue.
-  ##
   ## - The `fd` should be unregistered before closing so that resources associated
   ##   with any pending operations are released.
   ##
@@ -160,26 +219,10 @@ proc wait*(c; fd: AnyFD, overlapped: ref Overlapped): Continuation {.cpsMagic.} 
     # This will be temporary until we drafted out the semantics for these.
     raise newException(ValueError, $Error.QueuedFD % $fd.int)
 
-  # Register the handle with IOCP
-  if CreateIoCompletionPort(
-    wincore.Handle(fd), wincore.Handle(eq.iocp.get), ULongPtr(fd), 0
-  ) == wincore.Handle(0):
-    let errorCode = GetLastError()
-
-    # If an FD is already registered into IOCP
-    if errorCode == ErrorInvalidParameter and fd in eq.registered:
-      discard "already registered"
-    else:
-      raise newOSError(errorCode, $Error.Queue)
-
-  # If registration success but fd is already registered
-  elif fd in eq.registered:
-    # TODO: Find a way to make PrematureCloseDefect accessible from this module...
-    raise newException(Defect):
-      "Resource id " & $fd.int & " was invalidated before its waiter could execute"
-
-  # Add FD to the registered set
-  eq.registered.incl fd
+  # If the fd is not registered
+  if fd notin eq.registered:
+    # Raise a defect
+    raise newUnregisteredHandleDefect()
 
   eq.waiters[fd] = Waiter(cont: c, overlapped: overlapped)
 
@@ -194,24 +237,28 @@ proc unregister(fd: AnyFD) {.used.} =
     else:
       FD(fd)
 
-  # Remove FD from registered, if its in it
-  eq.registered.excl fd
+  # If fd is registered
+  if fd in eq.registered:
+    # Remove FD from registered set
+    eq.registered.excl fd
+    # Add FD to the orphans set instead
+    eq.orphans.incl fd
 
-  if fd in eq.waiters:
-    let overlappedAddr = addr eq.waiters[fd].overlapped[]
+    if fd in eq.waiters:
+      let overlappedAddr = addr eq.waiters[fd].overlapped[]
 
-    # Cancel the pending IO request
-    if CancelIoEx(wincore.Handle(fd), overlappedAddr) == 0:
-      let errorCode = GetLastError()
-      # If cancel said the request cannot be found, then it's probably finished
-      # and will be collected by the next poll()
-      if errorCode == ErrorNotFound:
-        discard
-      else:
-        raise newOSError(errorCode, $Error.Unregister)
+      # Cancel the pending IO request
+      if CancelIoEx(wincore.Handle(fd), overlappedAddr) == 0:
+        let errorCode = GetLastError()
+        # If cancel said the request cannot be found, then it's probably finished
+        # and will be collected by the next poll()
+        if errorCode == ErrorNotFound:
+          discard
+        else:
+          raise newOSError(errorCode, $Error.Unregister)
 
-    # Move the waiter to cancel queue. We index this queue with the pointer so
-    # that we can safely index it with arbitrary `ptr Overlapped` coming from
-    # the kernel.
-    eq.cancelled[overlappedAddr] = move eq.waiters[fd]
-    eq.waiters.del fd
+      # Move the waiter to cancel queue. We index this queue with the pointer so
+      # that we can safely index it with arbitrary `ptr Overlapped` coming from
+      # the kernel.
+      eq.cancelled[overlappedAddr] = move eq.waiters[fd]
+      eq.waiters.del fd

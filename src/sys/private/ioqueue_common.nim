@@ -26,3 +26,6 @@ type
 
     Unregister = "Could not unregister resource from the OS"
       ## Used when unregister() fails
+
+    Register = "Could not register resource to the OS"
+      ## Used when persist() fails
