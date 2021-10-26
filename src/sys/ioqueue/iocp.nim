@@ -6,7 +6,7 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
-import std/[tables, hashes, times, options, strutils]
+import std/[tables, hashes, times, options, strutils, packedsets]
 import pkg/cps
 import ".."/handles
 
@@ -39,6 +39,7 @@ type
       ## signified cancellation.
       eventBuffer: seq[OverlappedEntry] ##
       ## A persistent buffer for receiving events from the kernel.
+      registered: PackedSet[FD] ## A set of registered FDs.
     of false:
       discard
 
@@ -163,20 +164,38 @@ proc wait*(c; fd: AnyFD, overlapped: ref Overlapped): Continuation {.cpsMagic.} 
   if CreateIoCompletionPort(
     wincore.Handle(fd), wincore.Handle(eq.iocp.get), ULongPtr(fd), 0
   ) == wincore.Handle(0):
-    raise newOSError(GetLastError(), $Error.Queue)
+    let errorCode = GetLastError()
+
+    # If an FD is already registered into IOCP
+    if errorCode == ErrorInvalidParameter and fd in eq.registered:
+      discard "already registered"
+    else:
+      raise newOSError(errorCode, $Error.Queue)
+
+  # If registration success but fd is already registered
+  elif fd in eq.registered:
+    # TODO: Find a way to make PrematureCloseDefect accessible from this module...
+    raise newException(Defect):
+      "Resource id " & $fd.int & " was invalidated before its waiter could execute"
+
+  # Add FD to the registered set
+  eq.registered.incl fd
 
   eq.waiters[fd] = Waiter(cont: c, overlapped: overlapped)
 
 proc unregister(fd: AnyFD) {.used.} =
   ## See the documentation of `ioqueue.unregister()`
   bind running
-  if not running(): return
+  if not eq.initialized: return
 
   let fd =
     when fd is FD:
       fd
     else:
       FD(fd)
+
+  # Remove FD from registered, if its in it
+  eq.registered.excl fd
 
   if fd in eq.waiters:
     let overlappedAddr = addr eq.waiters[fd].overlapped[]
