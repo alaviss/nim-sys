@@ -27,3 +27,17 @@ when defined(bsd) or defined(linux):
   proc dup3*(oldfd, newfd, flags: cint): cint {.importc, header: "<unistd.h>".}
   proc pipe2*(pipefd: var array[2, cint],
               flags: cint): cint {.importc, header: "<unistd.h>".}
+
+template retryOnEIntr*(op: untyped): untyped =
+  ## Given a POSIX operation that returns `-1` on error, automatically retry it
+  ## if the error was `EINTR`.
+  var result: typeof(op)
+  while true:
+    result = op
+
+    if result == -1 and errno == EINTR:
+      discard "Got interrupted, try again"
+    else:
+      break
+
+  result

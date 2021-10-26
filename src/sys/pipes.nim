@@ -121,7 +121,7 @@ template takeFD*(p: AnyPipe): FD =
   takeFd distinctBase(typeof p) p
 
 template read*[T: byte or char](rp: ReadPipe, b: var openArray[T]): int =
-  ## Read `b.len` bytes from pipe `rp` into `b`.
+  ## Reads up to `b.len` bytes from pipe `rp` into `b`.
   ##
   ## This procedure is borrowed from
   ## `files.read() <files.html#read,File,openArray[T]>`_. See the borrowed
@@ -130,7 +130,7 @@ template read*[T: byte or char](rp: ReadPipe, b: var openArray[T]): int =
 
 template read*(rp: AsyncReadPipe, buf: ptr UncheckedArray[byte],
                bufLen: Natural): int =
-  ## Read `bufLen` bytes from pipe `rp` into `buf`.
+  ## Reads up to `bufLen` bytes from pipe `rp` into `buf`.
   ##
   ## This procedure is borrowed from
   ## `files.read() <files.html#read,AsyncFile,ptr.UncheckedArray[byte],Natural>`_.
@@ -138,14 +138,14 @@ template read*(rp: AsyncReadPipe, buf: ptr UncheckedArray[byte],
   read distinctBase(typeof rp) rp, buf, bufLen
 
 template read*[T: string or seq[byte]](rp: AsyncReadPipe, b: ref T): int =
-  ## Read `b.len` bytes from pipe `rp` into `b`.
+  ## Reads up to `b.len` bytes from pipe `rp` into `b`.
   ##
   ## This procedure is borrowed from
   ## `files.read() <files.html#read,AsyncFile,ref.string>`_. See the borrowed
   ## symbol's documentation for more details.
   read distinctBase(typeof rp) rp, b
 
-template write*[T: byte or char](wp: WritePipe, b: openArray[T]) =
+template write*[T: byte or char](wp: WritePipe, b: openArray[T]): int =
   ## Writes the contents of array `b` into the pipe `wp`.
   ##
   ## This procedure is borrowed from
@@ -154,7 +154,7 @@ template write*[T: byte or char](wp: WritePipe, b: openArray[T]) =
   write distinctBase(typeof wp) wp, b
 
 template write*(wp: AsyncWritePipe, buf: ptr UncheckedArray[byte],
-                bufLen: Natural) =
+                bufLen: Natural): int =
   ## Writes `bufLen` bytes from the buffer pointed to by `buf` into the pipe
   ## `wp`.
   ##
@@ -163,7 +163,7 @@ template write*(wp: AsyncWritePipe, buf: ptr UncheckedArray[byte],
   ## See the borrowed symbol's documentation for more details.
   write distinctBase(typeof wp) wp, buf, bufLen
 
-template write*[T: string or seq[byte]](wp: AsyncWritePipe, b: T) =
+template write*[T: string or seq[byte]](wp: AsyncWritePipe, b: T): int =
   ## Writes the contents of array `b` into the pipe `wp`. `b` will be copied.
   ##
   ## This procedure is borrowed from
@@ -171,7 +171,7 @@ template write*[T: string or seq[byte]](wp: AsyncWritePipe, b: T) =
   ## symbol's documentation for more details.
   write distinctBase(typeof wp) wp, b
 
-template write*[T: string or seq[byte]](wp: AsyncWritePipe, b: ref T) =
+template write*[T: string or seq[byte]](wp: AsyncWritePipe, b: ref T): int =
   ## Writes the contents of array `b` into the pipe `wp`.
   ##
   ## This procedure is borrowed from

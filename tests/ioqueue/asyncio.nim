@@ -87,6 +87,7 @@ proc readAsync*(rd: ref Handle[FD], buf: ref string) {.asyncio.} =
   ## information outside of cps yet
   when defined(windows):
     let overlapped = new Overlapped
+    persist(rd.get)
     if ReadFile(
       winim.Handle(rd.get), addr buf[0], DWORD(buf.len), nil,
       addr overlapped[]
@@ -122,6 +123,7 @@ proc writeAsync*(wr: ref Handle[FD], buf: string) {.asyncio.} =
   ## Write all bytes in `buf` into `wr` asynchronously
   when defined(windows):
     let overlapped = new Overlapped
+    persist(wr.get)
     if WriteFile(
       winim.Handle(wr.get), unsafeAddr buf[0], DWORD(buf.len), nil,
       addr overlapped[]
