@@ -10,7 +10,7 @@ const Delimiter = "\c\l\c\l"
   # The HTTP delimiter
 
 let
-  TestBufferedData = "!@#$%^TEST%$#@!\n".repeat(10_000_000)
+  TestBufferedData = "!@#$%^TEST%$#@!\n".repeat(2_000_000)
     ## A decently sized buffer that surpasses most OS pipe buffer size, which
     ## is usually in the range of 4-8MiB.
     ##
