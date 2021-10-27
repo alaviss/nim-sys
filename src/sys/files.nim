@@ -156,6 +156,8 @@ proc read*(f: AsyncFile, buf: ptr UncheckedArray[byte],
            bufLen: Natural): int {.asyncio.} =
   ## Reads up to `bufLen` bytes from file `f` into `buf`.
   ##
+  ## `buf` might be `nil` only if `bufLen` is `0`.
+  ##
   ## `buf` must stays alive for the duration of the read. Direct usage of this
   ## interface is discouraged due to its unsafetyness. Users are encouraged to
   ## use high-level overloads that keep buffers alive.
@@ -192,7 +194,8 @@ proc read*(f: AsyncFile, buf: ptr UncheckedArray[byte],
   ## - On POSIX systems, signals will not interrupt the operation.
   ##
   ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
-  assert(not buf.isNil, "The provided buffer must not be nil")
+  if buf == nil and bufLen != 0:
+    raise newException(ValueError, "A buffer must be provided for request of size > 0")
   asyncReadImpl()
 
 proc read*(f: AsyncFile, b: ref string): int {.asyncio.} =
@@ -202,7 +205,10 @@ proc read*(f: AsyncFile, b: ref string): int {.asyncio.} =
   ## `read() <#read,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please refer
   ## to its documentation for more information.
   assert(not b.isNil, "The provided buffer must not be nil")
-  read(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  if b.len > 0:
+    read(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  else:
+    read(f, nil, 0)
 
 proc read*(f: AsyncFile, b: ref seq[byte]): int {.asyncio.} =
   ## Reads up to `b.len` bytes from file `f` into `b`.
@@ -211,7 +217,10 @@ proc read*(f: AsyncFile, b: ref seq[byte]): int {.asyncio.} =
   ## `read() <#read,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please refer
   ## to its documentation for more information.
   assert(not b.isNil, "The provided buffer must not be nil")
-  read(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  if b.len > 0:
+    read(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  else:
+    read(f, nil, 0)
 
 proc write*[T: byte or char](f: File, b: openArray[T]): int {.raises: [IOError].} =
   ## Writes the contents of array `b` into file `f`.
@@ -227,6 +236,8 @@ proc write*[T: byte or char](f: File, b: openArray[T]): int {.raises: [IOError].
 proc write*(f: AsyncFile, buf: ptr UncheckedArray[byte],
             bufLen: Natural): int {.asyncio.} =
   ## Writes `bufLen` bytes from the buffer pointed to by `buf` to `f`.
+  ##
+  ## `buf` might be `nil` only if `bufLen` is `0`.
   ##
   ## `buf` must stays alive for the duration of the read. Direct usage of this
   ## interface is discouraged due to its unsafetyness. Users are encouraged to
@@ -256,7 +267,9 @@ proc write*(f: AsyncFile, buf: ptr UncheckedArray[byte],
   ## - On POSIX systems, signals will not interrupt the operation.
   ##
   ## .. _article: https://docs.microsoft.com/en-us/troubleshoot/windows/win32/asynchronous-disk-io-synchronous
-  assert(not buf.isNil, "The provided buffer must not be nil")
+  if buf == nil and bufLen != 0:
+    raise newException(ValueError, "A buffer must be provided for request of size > 0")
+
   asyncWriteImpl()
 
 proc write*(f: AsyncFile, b: string): int {.asyncio.} =
@@ -266,7 +279,10 @@ proc write*(f: AsyncFile, b: string): int {.asyncio.} =
   ## This is an overload of
   ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
   ## refer to its documentation for more information.
-  write(f, cast[ptr UncheckedArray[byte]](unsafeAddr b[0]), b.len)
+  if b.len > 0:
+    write(f, cast[ptr UncheckedArray[byte]](unsafeAddr b[0]), b.len)
+  else:
+    write(f, nil, 0)
 
 proc write*(f: AsyncFile, b: ref string): int {.asyncio.} =
   ## Writes the contents of array `b` into file `f`.
@@ -275,7 +291,10 @@ proc write*(f: AsyncFile, b: ref string): int {.asyncio.} =
   ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
   ## refer to its documentation for more information.
   assert(not b.isNil, "The provided buffer must not be nil")
-  write(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  if b.len > 0:
+    write(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  else:
+    write(f, nil, 0)
 
 proc write*(f: AsyncFile, b: seq[byte]): int {.asyncio.} =
   ## Writes the contents of array `b` into file `f`. The contents of `b` will
@@ -284,7 +303,10 @@ proc write*(f: AsyncFile, b: seq[byte]): int {.asyncio.} =
   ## This is an overload of
   ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
   ## refer to its documentation for more information.
-  write(f, cast[ptr UncheckedArray[byte]](unsafeAddr b[0]), b.len)
+  if b.len > 0:
+    write(f, cast[ptr UncheckedArray[byte]](unsafeAddr b[0]), b.len)
+  else:
+    write(f, nil, 0)
 
 proc write*(f: AsyncFile, b: ref seq[byte]): int {.asyncio.} =
   ## Writes the contents of array `b` into file `f`.
@@ -293,4 +315,7 @@ proc write*(f: AsyncFile, b: ref seq[byte]): int {.asyncio.} =
   ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
   ## refer to its documentation for more information.
   assert(not b.isNil, "The provided buffer must not be nil")
-  write(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  if b.len > 0:
+    write(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  else:
+    write(f, nil, 0)

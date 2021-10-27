@@ -30,14 +30,6 @@ suite "Test Pipe read/write behaviors":
     var str = newString(10)
     check rd.read(str) == 0
 
-  test "AsyncPipe EOF read":
-    let (rd, wr) = newAsyncPipe()
-
-    close wr
-    var str = new string
-    str[] = newString(10)
-    check rd.read(str) == 0
-
   test "Pipe EOF write":
     let (rd, wr) = newPipe()
 
@@ -50,6 +42,19 @@ suite "Test Pipe read/write behaviors":
         check e.bytesTransferred == 0
         raise e # Reraise so expect can catch it
 
+  test "AsyncPipe EOF read":
+    let (rd, wr) = newAsyncPipe()
+
+    close wr
+
+    proc runner() {.asyncio.} =
+      var str = new string
+      str[] = newString(10)
+      check rd.read(str) == 0
+
+    runner()
+    run()
+
   test "AsyncPipe EOF write":
     let (rd, wr) = newAsyncPipe()
 
@@ -61,6 +66,57 @@ suite "Test Pipe read/write behaviors":
       except IOError as e:
         check e.bytesTransferred == 0
         raise e
+
+  test "Pipe zero read":
+    let (rd, wr) = newPipe()
+
+    # Write something small so there is "something" in the pipe to prevent
+    # blocking
+    discard wr.write(" ")
+    var str = newString(0)
+    check rd.read(str) == 0
+
+  test "Pipe zero write":
+    let (rd, wr) = newPipe()
+
+    var str = newString(0)
+    check wr.write(str) == 0
+
+  test "AsyncPipe zero read":
+    let (rd, wr) = newAsyncPipe()
+
+    # Close the pipe to make sure read doesn't queue
+    #
+    # This is because Windows will queue reads until a pipe write is done.
+    close wr
+
+    proc runner() {.asyncio.} =
+      var str = new string
+      check rd.read(str) == 0
+
+      var sq = new seq[byte]
+      check rd.read(sq) == 0
+
+      check rd.read(nil, 0) == 0
+
+    runner()
+    run()
+
+  test "AsyncPipe zero write":
+    let (rd, wr) = newAsyncPipe()
+
+    proc runner() {.asyncio.} =
+      check wr.write("") == 0
+      check wr.write(default seq[byte]) == 0
+
+      var str = new string
+      check wr.write(str) == 0
+
+      var sq = new seq[byte]
+      check wr.write(sq) == 0
+
+    runner()
+    run()
 
   test "Pipe long read/write":
     proc writeWorker(wr: ptr WritePipe) {.thread.} =
