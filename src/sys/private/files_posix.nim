@@ -42,7 +42,11 @@ proc commonRead(fd: FD, buf: pointer, len: Natural): int {.inline.} =
   result = retryOnEIntr: read(cint(fd), buf, len)
 
 template readImpl() {.dirty.} =
-  let bytesRead = commonRead(f.fd, addr b[0], b.len)
+  let bytesRead =
+    if b.len > 0:
+      commonRead(f.fd, addr b[0], b.len)
+    else:
+      commonRead(f.fd, nil, 0)
 
   # In case of an error, raise
   if bytesRead == -1:
@@ -73,7 +77,11 @@ proc commonWrite(fd: FD, buf: pointer, len: Natural): int {.inline.} =
   result = retryOnEIntr: write(cint(fd), buf, len)
 
 template writeImpl() {.dirty.} =
-  let bytesWritten = commonWrite(f.fd, unsafeAddr b[0], b.len)
+  let bytesWritten =
+    if b.len > 0:
+      commonWrite(f.fd, unsafeAddr b[0], b.len)
+    else:
+      commonWrite(f.fd, nil, 0)
 
   # In case of an error, raise
   if bytesWritten == -1:

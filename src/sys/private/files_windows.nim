@@ -92,7 +92,11 @@ template readImpl() {.dirty.} =
   var bytesRead: DWORD
 
   if ReadFile(
-    wincore.Handle(f.fd), addr(b[0]), ioSize(b.len), addr bytesRead, nil
+    wincore.Handle(f.fd),
+    (if b.len > 0: addr(b[0]) else: nil),
+    ioSize(b.len),
+    addr bytesRead,
+    nil
   ) == wincore.FALSE:
     let errorCode = GetLastError()
     handleReadResult(errorCode, bytesRead)
@@ -152,7 +156,11 @@ template writeImpl() {.dirty.} =
   var bytesWritten: DWORD
 
   if WriteFile(
-    wincore.Handle(f.fd), unsafeAddr(b[0]), ioSize(b.len), addr bytesWritten, nil
+    wincore.Handle(f.fd),
+    (if b.len > 0: unsafeAddr(b[0]) else: nil),
+    ioSize(b.len),
+    addr bytesWritten,
+    nil
   ) == wincore.FALSE:
     raise newIOError(bytesWritten, GetLastError(), ErrorWrite)
 
