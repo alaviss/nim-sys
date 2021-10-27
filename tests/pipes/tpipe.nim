@@ -45,6 +45,9 @@ suite "Test Pipe read/write behaviors":
   test "Pipe zero read":
     let (rd, wr) = newPipe()
 
+    # Write something small so there is "something" in the pipe to prevent
+    # blocking
+    discard wr.write(" ")
     var str = newString(0)
     check rd.read(str) == 0
 
@@ -57,6 +60,9 @@ suite "Test Pipe read/write behaviors":
   test "AsyncPipe zero read":
     let (rd, wr) = newAsyncPipe()
 
+    # Write something small so there is "something" in the pipe to prevent
+    # blocking
+    discard wr.write(" ")
     var str = new string
     check rd.read(str) == 0
 
