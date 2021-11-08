@@ -78,7 +78,7 @@ when defined(posix):
       var str = newString(10)
       check client.read(str) == 0
 
-    test "Conn[TCP] EOF write":
+    test "Conn[TCP] EOF write with big buffers":
       proc acceptWorker(srv: ptr Listener[TCP]) {.thread.} =
         ## A server that accept a connection then drops it
         ## immediately
@@ -103,7 +103,7 @@ when defined(posix):
         # Some repeats will be necessary as some operating systems buffers data
         # and won't trigger a send immediately, thus not raising the error.
         for _ in 1 .. 10:
-          discard client.write("test data")
+          discard client.write(TestBufferedData)
 
     test "Conn[TCP] zero read":
       var l: Lock
@@ -234,13 +234,7 @@ when defined(posix):
       # Run the IO queue to completion
       run()
 
-    test "AsyncConn[TCP] EOF write":
-      # After many tries Linux just keep reporting EWOULDBLOCK.
-      #
-      # This is likely to be the same on other OS, this behavior can't be
-      # relied upon.
-      skip "Unable to confirm the behavior under Linux"
-
+    test "AsyncConn[TCP] EOF write with big buffers":
       proc acceptWorker(server: AsyncListener[TCP]) {.asyncio.} =
         ## A server that accept a connection then drops it
         ## immediately
@@ -265,7 +259,7 @@ when defined(posix):
           # error.
           var i = 0
           while i < 10:
-            discard client.write("test data")
+            discard client.write(TestBufferedData)
             inc i
 
       # Start the test
