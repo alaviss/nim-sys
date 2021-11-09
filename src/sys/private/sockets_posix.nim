@@ -274,6 +274,8 @@ template tcpAsyncListen() {.dirty.} =
       # Raise the error if any was found.
       if error != 0:
         raise newOSError(error, $Error.Listen)
+    else:
+      posixChk -1, $Error.Listen
 
   # Mark the socket as accepting connections
   posixChk listen(SocketHandle sock, 0), $Error.Listen

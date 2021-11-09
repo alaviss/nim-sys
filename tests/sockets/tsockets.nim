@@ -57,6 +57,22 @@ when defined(posix):
       checkAsync()
       run()
 
+    test "Listener[TCP] listening on same endpoint error":
+      let server = listenTcp(IP4Loopback, PortNone)
+
+      expect OSError:
+        discard listenTcp(server.localEndpoint)
+
+    test "AsyncListener[TCP] listening on same endpoint error":
+      proc runner() {.asyncio.} =
+        let server = listenTcpAsync(IP4Loopback, PortNone)
+
+        expect OSError:
+          discard listenTcpAsync(server.localEndpoint)
+
+      runner()
+      run()
+
     test "Conn[TCP] EOF read":
       proc acceptWorker(srv: ptr Listener[TCP]) {.thread.} =
         ## A server that accept a connection then drops it
