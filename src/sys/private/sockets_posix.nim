@@ -141,7 +141,7 @@ template ip4Resolve() {.dirty.} =
     unsafeAddr hints,
     result.info
   )
-   
+
   if err != 0:
     if err == EAI_SYSTEM:
       raise newOSError(errno, $Error.Resolve)
@@ -160,15 +160,43 @@ template resolvedItems() {.dirty.} =
 
     info = info.ai_next
 
+proc handleAsyncConnectResult(fd: SocketFD) {.raises: [OSError].} =
+  ## Raise errors from an asynchronous connection on `fd`, if any.
+  # Examine the SO_ERROR in SOL_SOCKET for any error happened during the asynchronous operation.
+  var
+    error: cint
+    errorLen = SockLen sizeof(error)
+  posixChk getsockopt(
+    SocketHandle(fd), SOL_SOCKET, SO_ERROR, addr error, addr errorLen
+  ):
+    $Error.Connect
+
+  assert errorLen == SockLen sizeof(error):
+    "The length of the error does not match nim-sys assumption. This is a nim-sys bug."
+
+  # Raise the error if any was found.
+  if error != 0:
+    raise newOSError(error, $Error.Connect)
+
 template tcpConnect() {.dirty.} =
   let sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
 
-  posixChk connect(
+  if connect(
     SocketHandle(sock.get),
     cast[ptr Sockaddr](unsafeAddr endpoint),
     SockLen sizeof(endpoint)
-  ):
-    $Error.Connect
+  ) == -1:
+    # On EINTR, the connection will be done asynchronously
+    if errno == EINTR:
+      # Block until its done
+      var pollfd = TPollfd(fd: sock.get.cint, events: PollOut)
+      let pollRet = retryOnEIntr: poll(addr pollfd, 1, -1)
+      if pollRet == -1:
+        raise newOSError(errno, $Error.Connect)
+
+      handleAsyncConnectResult(sock.get)
+    else:
+      raise newOSError(errno, $Error.Connect)
 
   # Take ownership of the socket from the handle
   result = Conn[TCP] newSocket(sock)
@@ -182,26 +210,11 @@ template tcpAsyncConnect() {.dirty.} =
     SockLen sizeof(endpoint)
   ) == -1:
     # If the connection is happening asynchronously
-    if errno == EINPROGRESS:
+    if errno == EINPROGRESS or errno == EINTR:
       # Wait until the socket is writable, which is when it is "connected" (see connect(3p)).
       wait(sock, Event.Write)
 
-      # Examine the SO_ERROR in SOL_SOCKET for any error happened during the asynchronous operation.
-      var
-        error: cint
-        errorLen = SockLen sizeof(error)
-      posixChk getsockopt(
-        SocketHandle(sock.get), SOL_SOCKET, SO_ERROR, addr error, addr errorLen
-      ):
-        $Error.Connect
-
-      assert errorLen == SockLen sizeof(error):
-        "The length of the error does not match nim-sys assumption. This is a nim-sys bug."
-
-      # Raise the error if any was found.
-      if error != 0:
-        raise newOSError(error, $Error.Connect)
-
+      handleAsyncConnectResult(sock.get)
     else:
       raise newOSError(errno, $Error.Connect)
 
@@ -236,7 +249,7 @@ template tcpListen() {.dirty.} =
   # Mark the socket as accepting connections
   posixChk listen(SocketHandle(sock.get), backlog.get(maxBacklog()).cint):
     $Error.Listen
-  
+
   result = Listener[TCP] newSocket(sock)
 
 template tcpAsyncListen() {.dirty.} =
@@ -275,7 +288,7 @@ template tcpAsyncListen() {.dirty.} =
   # Mark the socket as accepting connections
   posixChk listen(SocketHandle(sock.get), backlog.get(maxBacklog()).cint):
     $Error.Listen
-  
+
   # An explicit move has to be done in CPS
   result = AsyncListener[TCP] newAsyncSocket(move sock)
 
@@ -297,19 +310,20 @@ proc commonAccept[T](fd: SocketFD, remoteAddr: var T,
   var remoteLen = SockLen(sizeof remoteAddr)
   let conn = initHandle:
     SocketFD:
-      when declared(accept4):
-        accept4(
-          fd.SocketHandle,
-          cast[ptr SockAddr](addr remoteAddr),
-          addr remoteLen,
-          extraFlags
-        )
-      else:
-        accept(
-          fd.SocketHandle,
-          cast[ptr SockAddr](addr remoteAddr),
-          addr remoteLen
-        )
+      retryOnEIntr:
+        when declared(accept4):
+          accept4(
+            fd.SocketHandle,
+            cast[ptr SockAddr](addr remoteAddr),
+            addr remoteLen,
+            extraFlags
+          )
+        else:
+          accept(
+            fd.SocketHandle,
+            cast[ptr SockAddr](addr remoteAddr),
+            addr remoteLen
+          )
 
   # Exit if accept failed
   if conn.get == InvalidFD:

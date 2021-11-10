@@ -37,7 +37,7 @@ template retryOnEIntr*(op: untyped): untyped =
   while true:
     result = op
 
-    if result == -1 and errno == EINTR:
+    if cint(result) == -1 and errno == EINTR:
       discard "Got interrupted, try again"
     else:
       break
