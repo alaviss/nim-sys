@@ -12,7 +12,7 @@
 
 import system except IOError
 
-import std/[genasts, macros]
+import std/[genasts, macros, options]
 import pkg/stew/endians2
 import files, handles, ioqueue
 
@@ -600,17 +600,26 @@ type
 derive Listener, Socket
 derive AsyncListener, AsyncSocket
 
-proc listenTcp*(endpoint: IP4Endpoint): Listener[TCP]
+proc listenTcp*(endpoint: IP4Endpoint, backlog = none(Natural)): Listener[TCP]
                {.raises: [OSError].} =
   ## Listen at `endpoint` for TCP connections.
   ##
   ## If the port of the endpoint is `PortNone`, an ephemeral port will be
   ## reserved automatically by the operating system. `localEndpoint` can be
   ## used to retrieve the port number.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
   tcpListen()
 
-proc listenTcp*(endpoints: ResolverResult): Listener[TCP]
-                {.raises: [OSError, IncompatibleEndpointError].} =
+proc listenTcp*(endpoints: ResolverResult, backlog = none(Natural)): Listener[TCP]
+               {.raises: [OSError, IncompatibleEndpointError].} =
   ## Listen for TCP connections at one of the endpoint in `endpoints`.
   ##
   ## The first endpoint listened to successfully will be used.
@@ -624,13 +633,22 @@ proc listenTcp*(endpoints: ResolverResult): Listener[TCP]
   ## If the port of the endpoint is `PortNone`, an ephemeral port will be
   ## reserved automatically by the operating system. `localEndpoint` can be
   ## used to retrieve the port number.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
   var
     attempted = false
     lastError: ref OSError
   for ep in endpoints.items:
     attempted = true
     try:
-      result = listenTcp(ep)
+      result = listenTcp(ep, backlog)
     except OSError as e:
       lastError = e
       continue
@@ -644,34 +662,62 @@ proc listenTcp*(endpoints: ResolverResult): Listener[TCP]
   else:
     raise lastError
 
-proc listenTcp*(host: IP4, port: Port): Listener[TCP]
+proc listenTcp*(host: IP4, port: Port, backlog = none(Natural)): Listener[TCP]
                {.inline, raises: [OSError].} =
   ## Listen at `host` and `port` for TCP connections.
   ##
   ## If the port of the endpoint is `PortNone`, an ephemeral port will be
   ## reserved automatically by the operating system. `localEndpoint` can be
   ## used to fetch this data.
-  listenTcp initEndpoint(host, port)
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
+  listenTcp(initEndpoint(host, port), backlog)
 
-proc listenTcp*(host: string, port: Port): Listener[TCP]
+proc listenTcp*(host: string, port: Port, backlog = none(Natural)): Listener[TCP]
                {.inline, raises: [OSError, IncompatibleEndpointError, ResolverError].} =
   ## Listen at `host` and `port` for TCP connections.
   ##
   ## If the port of the endpoint is `PortNone`, an ephemeral port will be
   ## reserved automatically by the operating system. `localEndpoint` can be
   ## used to retrieve the port number.
-  listenTcp resolveIP4(host, port)
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
+  listenTcp(resolveIP4(host, port), backlog)
 
-proc listenTcpAsync*(endpoint: IP4Endpoint): AsyncListener[TCP]
+{.warning: "Compiler bug workaround, see https://github.com/nim-lang/Nim/issues/19118".}
+proc listenTcpAsync*(endpoint: IP4Endpoint, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
                     {.asyncio.} =
   ## Listen at `endpoint` for TCP connections asynchronously.
   ##
   ## If the port of the endpoint is `PortNone`, an ephemeral port will be
   ## reserved automatically by the operating system. `localEndpoint` can be
   ## used to retrieve the port number.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
   tcpAsyncListen()
 
-proc listenTcpAsync*(endpoints: ResolverResult): AsyncListener[TCP]
+proc listenTcpAsync*(endpoints: ResolverResult, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
                     {.asyncio.} =
   ## Listen for TCP connections at one of the endpoint in `endpoints`.
   ##
@@ -701,7 +747,7 @@ proc listenTcpAsync*(endpoints: ResolverResult): AsyncListener[TCP]
     if next.finished: break
 
     try:
-      result = listenTcpAsync(ep)
+      result = listenTcpAsync(ep, backlog)
     except OSError as e:
       lastError = e
       continue
@@ -715,25 +761,43 @@ proc listenTcpAsync*(endpoints: ResolverResult): AsyncListener[TCP]
   else:
     raise lastError
 
-proc listenTcpAsync*(host: IP4, port: Port): AsyncListener[TCP]
+proc listenTcpAsync*(host: IP4, port: Port, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
                     {.asyncio.} =
   ## Listen at `host` and `port` for TCP connections.
   ##
   ## If the port of the endpoint is `PortNone`, an ephemeral port will be
   ## reserved automatically by the operating system. `localEndpoint` can be
   ## used to retrieve the port number.
-  listenTcpAsync initEndpoint(host, port)
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
+  listenTcpAsync(initEndpoint(host, port), backlog)
 
-proc listenTcpAsync*(host: string, port: Port): AsyncListener[TCP]
+proc listenTcpAsync*(host: string, port: Port, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
                     {.asyncio.} =
   ## Listen at `host` and `port` for TCP connections.
   ##
   ## If the port of the endpoint is `PortNone`, an ephemeral port will be
   ## reserved automatically by the operating system. `localEndpoint` can be
   ## used to retrieve the port number.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
   # A move have to be performed due to the compiler thinking that this is a
   # "copy".
-  listenTcpAsync resolveIP4(host, port)
+  listenTcpAsync(resolveIP4(host, port), backlog)
 
 proc accept*(l: Listener[TCP]): tuple[conn: Conn[TCP], remote: IP4Endpoint] {.raises: [OSError].} =
   ## Get the first connection from the queue of pending connections of `l`.

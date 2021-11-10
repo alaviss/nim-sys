@@ -208,6 +208,20 @@ template tcpAsyncConnect() {.dirty.} =
   # A move has to be done in CPS
   result = AsyncConn[TCP] newAsyncSocket(move sock)
 
+func maxBacklog(): Natural =
+  ## Retrieve the maximum backlog value for the target OS
+  when defined(linux) or defined(macosx) or defined(bsd):
+    # There operating systems will automatically clamp the value to the system
+    # maximum.
+    high(cint)
+  else:
+    # For others, use SOMAXCONN.
+    #
+    # Mark as noSideEffect since this is a C constant but declared in Nim as a
+    # variable.
+    {.noSideEffect.}:
+      SOMAXCONN
+
 template tcpListen() {.dirty.} =
   let sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
 
@@ -220,7 +234,8 @@ template tcpListen() {.dirty.} =
     $Error.Listen
 
   # Mark the socket as accepting connections
-  posixChk listen(SocketHandle(sock.get), 0), $Error.Listen
+  posixChk listen(SocketHandle(sock.get), backlog.get(maxBacklog()).cint):
+    $Error.Listen
   
   result = Listener[TCP] newSocket(sock)
 
@@ -258,7 +273,8 @@ template tcpAsyncListen() {.dirty.} =
       raise newOSError(errno, $Error.Listen)
 
   # Mark the socket as accepting connections
-  posixChk listen(SocketHandle(sock.get), 0), $Error.Listen
+  posixChk listen(SocketHandle(sock.get), backlog.get(maxBacklog()).cint):
+    $Error.Listen
   
   # An explicit move has to be done in CPS
   result = AsyncListener[TCP] newAsyncSocket(move sock)
