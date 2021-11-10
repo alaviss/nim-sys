@@ -14,33 +14,29 @@ type
     ## Flags used for makeSocket
     sfNonBlock
 
-proc makeSocket(domain, typ, proto: cint, flags: set[SockFlag] = {}): SocketFD =
+proc makeSocket(domain, typ, proto: cint, flags: set[SockFlag] = {}): Handle[SocketFD] =
   var stype = typ
 
   when not defined(macosx):
-    # OSX does not support setting cloexec and nonblock on the same socket
+    # OSX does not support setting cloexec and nonblock on the sock type parameter
     stype = stype or SOCK_CLOEXEC
 
     if sfNonBlock in flags:
       stype = stype or SOCK_NONBLOCK
 
-  result = SocketFD socket(domain, stype, proto)
-  posixChk cint(result)
-
-  # In the case where any of the following steps fail, we want to close
-  # the FD to prevent leaks.
-  var success = false
-  defer:
-    if not success:
-      close result
+  let sock = initHandle: SocketFD socket(domain, stype, proto)
+  if sock.get == InvalidFD:
+    raise newOSError(errno)
 
   when defined(macosx):
+    # OSX does not support setting cloexec and nonblock on socket creation, so
+    # it has to be done here.
     setInheritable(result, false)
 
     if sfNonBlock in flags:
       setBlocking(result, false)
 
-  success = true
+  result = sock
 
 template readImpl() {.dirty.} =
   let bytesRead = retryOnEIntr:
@@ -167,33 +163,25 @@ template resolvedItems() {.dirty.} =
 template tcpConnect() {.dirty.} =
   let sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
 
-  # Close the socket if the connection attempt was unsuccessful
-  var success = false
-  defer:
-    if not success:
-      close sock
-
   posixChk connect(
-    SocketHandle(sock),
+    SocketHandle(sock.get),
     cast[ptr Sockaddr](unsafeAddr endpoint),
     SockLen sizeof(endpoint)
   ):
     $Error.Connect
 
+  # Take ownership of the socket from the handle
   result = Conn[TCP] newSocket(sock)
-  success = true
 
 template tcpAsyncConnect() {.dirty.} =
-  let sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
+  var sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
 
-  # Close the socket if the connection attempt was unsuccessful
-  var success = false
-  defer:
-    if not success:
-      close sock
-
-  if connect(SocketHandle(sock), cast[ptr Sockaddr](unsafeAddr endpoint), SockLen sizeof(endpoint)) == -1:
-    # The connection is happening asynchronously
+  if connect(
+    SocketHandle(sock.get),
+    cast[ptr Sockaddr](unsafeAddr endpoint),
+    SockLen sizeof(endpoint)
+  ) == -1:
+    # If the connection is happening asynchronously
     if errno == EINPROGRESS:
       # Wait until the socket is writable, which is when it is "connected" (see connect(3p)).
       wait(sock, Event.Write)
@@ -203,7 +191,7 @@ template tcpAsyncConnect() {.dirty.} =
         error: cint
         errorLen = SockLen sizeof(error)
       posixChk getsockopt(
-        SocketHandle(sock), SOL_SOCKET, SO_ERROR, addr error, addr errorLen
+        SocketHandle(sock.get), SOL_SOCKET, SO_ERROR, addr error, addr errorLen
       ):
         $Error.Connect
 
@@ -213,44 +201,36 @@ template tcpAsyncConnect() {.dirty.} =
       # Raise the error if any was found.
       if error != 0:
         raise newOSError(error, $Error.Connect)
+
     else:
       raise newOSError(errno, $Error.Connect)
 
-  result = AsyncConn[TCP] newAsyncSocket(sock)
-  success = true
+  # A move has to be done in CPS
+  result = AsyncConn[TCP] newAsyncSocket(move sock)
 
 template tcpListen() {.dirty.} =
   let sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
 
-  # Close the socket if the attempt was unsuccessful
-  var success = false
-  defer:
-    if not success:
-      close sock
-
   # Bind the address to the socket
   posixChk bindSocket(
-    SocketHandle sock, cast[ptr SockAddr](unsafeAddr endpoint), SockLen sizeof(endpoint)
+    SocketHandle(sock.get),
+    cast[ptr SockAddr](unsafeAddr endpoint),
+    SockLen sizeof(endpoint)
   ):
     $Error.Listen
 
   # Mark the socket as accepting connections
-  posixChk listen(SocketHandle sock, 0), $Error.Listen
+  posixChk listen(SocketHandle(sock.get), 0), $Error.Listen
   
   result = Listener[TCP] newSocket(sock)
-  success = true
 
 template tcpAsyncListen() {.dirty.} =
-  let sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
-
-  # Close the socket if the attempt was unsuccessful
-  var success = false
-  defer:
-    if not success:
-      close sock
+  var sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
 
   if bindSocket(
-    SocketHandle sock, cast[ptr SockAddr](unsafeAddr endpoint), SockLen sizeof(endpoint)
+    SocketHandle(sock.get),
+    cast[ptr SockAddr](unsafeAddr endpoint),
+    SockLen sizeof(endpoint)
   ) == -1:
     # While this is shown in the POSIX manual to be a possible error value, in
     # practice it appears that not many (if any) OS actually implements bind
@@ -264,7 +244,7 @@ template tcpAsyncListen() {.dirty.} =
         error: cint
         errorLen = SockLen sizeof(error)
       posixChk getsockopt(
-        SocketHandle(sock), SOL_SOCKET, SO_ERROR, addr error, addr errorLen
+        SocketHandle(sock.get), SOL_SOCKET, SO_ERROR, addr error, addr errorLen
       ):
         $Error.Connect
 
@@ -278,57 +258,78 @@ template tcpAsyncListen() {.dirty.} =
       raise newOSError(errno, $Error.Listen)
 
   # Mark the socket as accepting connections
-  posixChk listen(SocketHandle sock, 0), $Error.Listen
+  posixChk listen(SocketHandle(sock.get), 0), $Error.Listen
   
-  result = AsyncListener[TCP] newAsyncSocket(sock)
-  success = true
+  # An explicit move has to be done in CPS
+  result = AsyncListener[TCP] newAsyncSocket(move sock)
 
-template tcpAccept() {.dirty.} =
-  var remoteLen = SockLen sizeof(result.remote)
+proc commonAccept[T](fd: SocketFD, remoteAddr: var T,
+                     flags: set[SockFlag] = {}): Handle[SocketFD] =
+  ## Light wrapper over `accept` for constructing new sockets.
+  ##
+  ## Yields handle with InvalidFD on failure in `accept` syscall, raises
+  ## otherwise. Check errno for more details.
+  result = initHandle(SocketFD InvalidFD)
 
-  let conn = SocketFD:
-    when not defined(macosx):
-      accept4(l.fd.SocketHandle, cast[ptr SockAddr](addr result.remote), addr remoteLen, SOCK_CLOEXEC)
-    else:
-      accept(l.fd.SocketHandle, cast[ptr SockAddr](addr result.remote), addr remoteLen)
+  when declared(accept4):
+    # Extra flags to pass to accept4
+    var extraFlags = SOCK_CLOEXEC # disable inheritance by default
 
-  posixChk cint(conn), $Error.Accept
+    if sfNonBlock in flags:
+      extraFlags = extraFlags or SOCK_NONBLOCK
 
-  # On failure close the connection
-  var success = false
-  defer:
-    if not success:
-      close conn
+  var remoteLen = SockLen(sizeof remoteAddr)
+  let conn = initHandle:
+    SocketFD:
+      when declared(accept4):
+        accept4(
+          fd.SocketHandle,
+          cast[ptr SockAddr](addr remoteAddr),
+          addr remoteLen,
+          extraFlags
+        )
+      else:
+        accept(
+          fd.SocketHandle,
+          cast[ptr SockAddr](addr remoteAddr),
+          addr remoteLen
+        )
 
-  assert remoteLen == SockLen sizeof(result.remote):
+  # Exit if accept failed
+  if conn.get == InvalidFD:
+    return
+
+  # TODO: Remove this once IPv6 support lands
+  #
+  # This is used to verify that we are getting IPv4 address.
+  assert remoteLen == SockLen(sizeof remoteAddr):
     "The length of the endpoint structure does not match assumption. This is a nim-sys bug."
-  assert result.remote.sin_family == AF_INET.TSa_Family:
+  assert remoteAddr.sin_family == AF_INET.TSa_Family:
     "The address is not IPv4. This is a nim-sys bug."
 
-  when defined(macosx):
-    # OSX does not support the accept4 interface, so we have to set the
-    # properties manually.
-    conn.setInheritable(false)
+  when not declared(accept4):
+    # On systems without accept4, flags have to be set manually.
+    conn.get.setInheritable(false)
+
+    if sfNonBlock in flags:
+      conn.get.setBlocking(false)
+
+  # Return the connection
+  result = conn
+
+template tcpAccept() {.dirty.} =
+  let conn = commonAccept[IP4Endpoint](l.fd, result.remote)
+  if conn.get == InvalidFD:
+    raise newOSError(errno, $Error.Accept)
 
   result.conn = Conn[TCP] newSocket(conn)
-  success = true
 
 template tcpAsyncAccept() {.dirty.} =
-  var
-    conn = SocketFD InvalidFD
-    remoteLen: SockLen
-
   # Loop until we get a connection
   while true:
-    remoteLen = SockLen sizeof(result.remote)
+    var conn = commonAccept[IP4Endpoint](l.fd, result.remote, {sfNonBlock})
 
-    conn = SocketFD:
-      when not defined(macosx):
-        accept4(l.fd.SocketHandle, cast[ptr SockAddr](addr result.remote), addr remoteLen, SOCK_CLOEXEC or SOCK_NONBLOCK)
-      else:
-        accept(l.fd.SocketHandle, cast[ptr SockAddr](addr result.remote), addr remoteLen)
-
-    if conn == InvalidFD:
+    if conn.get == InvalidFD:
       # If the socket signals that no connections are pending
       if errno == EAGAIN or errno == EWOULDBLOCK:
         # Wait until some shows up then try again
@@ -337,27 +338,8 @@ template tcpAsyncAccept() {.dirty.} =
         raise newOSError(errno, $Error.Accept)
     else:
       # We got a connection
-      break
-
-  # On failure close the connection
-  var success = false
-  defer:
-    if not success:
-      close conn
-
-  assert remoteLen == SockLen sizeof(result.remote):
-    "The length of the endpoint structure does not match assumption. This is a nim-sys bug."
-  assert result.remote.sin_family == AF_INET.TSa_Family:
-    "The address is not IPv4. This is a nim-sys bug."
-
-  when defined(macosx):
-    # OSX does not support the accept4 interface, so we have to set the
-    # properties manually.
-    conn.setInheritable(false)
-    conn.setBlocking(false)
-
-  result.conn = AsyncConn[TCP] newSocket(conn)
-  success = true
+      result.conn = AsyncConn[TCP] newAsyncSocket(move conn)
+      return
 
 template tcpLocalEndpoint() {.dirty.} =
   var endpointLen = SockLen sizeof(result)

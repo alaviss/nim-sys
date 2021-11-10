@@ -86,7 +86,7 @@ proc close*(s: AsyncSocket) {.inline.} =
   ## The FD associated with `s` will be deregistered from `ioqueue`.
   close s[]
 
-func newSocket*(fd: SocketFD): Socket =
+func newSocket*(fd: SocketFD): Socket {.inline.} =
   ## Creates a new `Socket` from an opened socket handle.
   ##
   ## The ownership of the handle will be transferred to the resulting `Socket`.
@@ -101,7 +101,7 @@ func newSocket*(fd: SocketFD): Socket =
   ##   <#newAsyncSocket.SocketFD>` instead.
   Socket(handle: initHandle(fd))
 
-func newAsyncSocket*(fd: SocketFD): AsyncSocket =
+func newAsyncSocket*(fd: SocketFD): AsyncSocket {.inline.} =
   ## Creates a new `AsyncSocket` from an opened socket handle.
   ##
   ## The ownership of the handle will be transferred to the resulting `Socket`.
@@ -115,6 +115,36 @@ func newAsyncSocket*(fd: SocketFD): AsyncSocket =
   ##
   ## - On Windows, it is assumed that `fd` is opened in overlapped mode.
   AsyncSocket newSocket(fd)
+
+func newSocket*(handle: sink Handle[SocketFD]): Socket {.inline.} =
+  ## Creates a new `Socket` from an opened socket handle.
+  ##
+  ## The ownership of the handle will be transferred to the resulting `Socket`.
+  ##
+  ## **Note**: It is assumed that the handle has been opened in synchronous
+  ## mode. Only use this interface if you know what you are doing.
+  ##
+  ## **Platform specific details**
+  ##
+  ## - On Windows, sockets created via Winsock `socket()` function are opened
+  ##   in overlapped mode and should be passed to `newAsyncSocket
+  ##   <#newAsyncSocket.SocketFD>` instead.
+  Socket(handle: handle)
+
+func newAsyncSocket*(handle: sink Handle[SocketFD]): AsyncSocket {.inline.} =
+  ## Creates a new `AsyncSocket` from an opened socket handle.
+  ##
+  ## The ownership of the handle will be transferred to the resulting `Socket`.
+  ##
+  ## **Note**: It is assumed that the handle has been opened in asynchronous
+  ## mode. Only use this interface if you know what you are doing.
+  ##
+  ## **Platform specific details**
+  ##
+  ## - On POSIX, it is assumed that `fd` is opened with `O_NONBLOCK` set.
+  ##
+  ## - On Windows, it is assumed that `fd` is opened in overlapped mode.
+  AsyncSocket newSocket(handle)
 
 template derive(T, Base: typedesc): untyped =
   ## Template to mass-borrow socket operations.
