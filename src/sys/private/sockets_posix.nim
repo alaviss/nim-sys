@@ -214,7 +214,7 @@ template tcpAsyncConnect() {.dirty.} =
       if error != 0:
         raise newOSError(error, $Error.Connect)
     else:
-      posixChk -1, $Error.Connect
+      raise newOSError(errno, $Error.Connect)
 
   result = AsyncConn[TCP] newAsyncSocket(sock)
   success = true
@@ -275,7 +275,7 @@ template tcpAsyncListen() {.dirty.} =
       if error != 0:
         raise newOSError(error, $Error.Listen)
     else:
-      posixChk -1, $Error.Listen
+      raise newOSError(errno, $Error.Listen)
 
   # Mark the socket as accepting connections
   posixChk listen(SocketHandle sock, 0), $Error.Listen
@@ -334,7 +334,7 @@ template tcpAsyncAccept() {.dirty.} =
         # Wait until some shows up then try again
         wait(l.fd, Event.Read)
       else:
-        posixChk -1, $Error.Accept
+        raise newOSError(errno, $Error.Accept)
     else:
       # We got a connection
       break
