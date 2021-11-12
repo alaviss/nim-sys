@@ -35,7 +35,7 @@ template readImpl() {.dirty.} =
   if WSARecv(
     wincore.Socket(s.fd), addr buf, 1, addr bytesRead, addr flags, nil, nil
   ) == SocketError:
-    raise newOSError(WSAGetLastError(), $Error.Read)
+    raise newIOError(bytesRead, WSAGetLastError(), $Error.Read)
 
   result = bytesRead
 
@@ -57,7 +57,7 @@ template writeImpl() {.dirty.} =
   if WSASend(
     wincore.Socket(s.fd), addr buf, 1, addr bytesWritten, 0, nil, nil
   ) == SocketError:
-    raise newOSError(WSAGetLastError(), $Error.Write)
+    raise newIOError(bytesWritten, WSAGetLastError(), $Error.Write)
 
   result = bytesWritten
 
@@ -100,7 +100,7 @@ template asyncReadImpl() {.dirty.} =
 
   # Raise errors on failure.
   if errorCode != ErrorSuccess:
-    raise newOSError(errorCode, $Error.Read)
+    raise newIOError(bytesRead, errorCode, $Error.Read)
 
   result = bytesRead
 
@@ -144,7 +144,7 @@ template asyncWriteImpl() {.dirty.} =
 
   # Raise errors on failure.
   if errorCode != ErrorSuccess:
-    raise newOSError(errorCode, $Error.Write)
+    raise newIOError(bytesWritten, errorCode, $Error.Write)
 
   result = bytesWritten
 
