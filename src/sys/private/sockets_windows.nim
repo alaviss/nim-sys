@@ -18,10 +18,17 @@ func ioSize(x: int): ULONG {.inline.} =
 
 template readImpl() {.dirty.} =
   var
-    buf = WSABuf(
-      len: ioSize(b.len),
-      buf: addr b[0]
-    )
+    buf =
+      if b.len > 0:
+        WSABuf(
+          len: ioSize(b.len),
+          buf: cast[ptr char](addr b[0])
+        )
+      else:
+        WSABuf(
+          len: 0,
+          buf: nil
+        )
     bytesRead: DWORD
     flags: DWORD # This is ignored for now
 
@@ -34,10 +41,17 @@ template readImpl() {.dirty.} =
 
 template writeImpl() {.dirty.} =
   var
-    buf = WSABuf(
-      len: ioSize(b.len),
-      buf: unsafeAddr b[0]
-    )
+    buf =
+      if b.len > 0:
+        WSABuf(
+          len: ioSize(b.len),
+          buf: cast[ptr char](unsafeAddr b[0])
+        )
+      else:
+        WSABuf(
+          len: 0,
+          buf: nil
+        )
     bytesWritten: DWORD
 
   if WSASend(
@@ -56,7 +70,7 @@ template asyncReadImpl() {.dirty.} =
     errorCode: DWORD = ErrorSuccess
     buf = WSABuf(
       len: ioSize(bufLen),
-      buf: cast[cstring](buf)
+      buf: cast[ptr char](buf)
     )
     bytesRead: DWORD
     flags: DWORD # This is ignored for now
@@ -99,7 +113,7 @@ template asyncWriteImpl() {.dirty.} =
     errorCode: DWORD = ErrorSuccess
     buf = WSABuf(
       len: ioSize(bufLen),
-      buf: cast[cstring](buf)
+      buf: cast[ptr char](buf)
     )
     bytesWritten: DWORD
 
