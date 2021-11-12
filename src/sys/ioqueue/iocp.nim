@@ -143,6 +143,8 @@ proc persist(fd: AnyFD) {.raises: [OSError].} =
   bind init
   init()
 
+  let fd = FD fd
+
   # Skip the registation check via IOCP on release build as an optimization.
   when defined(release):
     if fd in eq.registered:
@@ -225,6 +227,13 @@ proc wait*(c; fd: AnyFD, overlapped: ref Overlapped): Continuation {.cpsMagic.} 
     raise newUnregisteredHandleDefect()
 
   eq.waiters[fd] = Waiter(cont: c, overlapped: overlapped)
+
+proc wait*(c; handle: Handle[AnyFD], overlapped: ref Overlapped): Continuation {.cpsMagic.} =
+  ## Wait for the operation associated with `overlapped` to finish.
+  ##
+  ## This is an overload of `wait <#wait,,AnyFD,ref.OVERLAPPED>`_ for use with
+  ## `Handle[T]`.
+  wait(c, handle.get, overlapped)
 
 proc unregister(fd: AnyFD) {.used.} =
   ## See the documentation of `ioqueue.unregister()`

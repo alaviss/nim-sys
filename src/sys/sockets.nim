@@ -182,26 +182,8 @@ type
 
 when defined(posix):
   include private/sockets_posix
-elif defined(nimdoc):
-  # Provide dummies implementation template for nimdoc
-  template readImpl() = discard
-  template asyncReadImpl() = discard
-  template writeImpl() = discard
-  template asyncWriteImpl() = discard
-  template ip4Word() = discard
-  template ip4SetWord() = discard
-  template ip4InitEndpoint() = discard
-  template ip4EndpointAddr() = discard
-  template ip4EndpointPort() = discard
-  template ip4Resolve() = discard
-  template resolvedItems() = discard
-  template tcpConnect() = discard
-  template tcpAsyncConnect() = discard
-  template tcpListen() = discard
-  template tcpAsyncListen() = discard
-  template tcpAccept() = discard
-  template tcpAsyncAccept() = discard
-  template tcpLocalEndpoint() = discard
+elif defined(windows):
+  include private/sockets_windows
 else:
   {.error: "This module has not been ported to your operating system.".}
 
