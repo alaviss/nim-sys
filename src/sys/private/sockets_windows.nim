@@ -158,7 +158,7 @@ template ip4Word() {.dirty.} =
 template ip4SetWord() {.dirty.} =
   ip.S_addr = cast[int32](w)
 
-type IP4EndpointImpl {.borrow: `.`.} = distinct Sockaddr_in
+type IP4EndpointImpl {.requiresInit, borrow: `.`.} = distinct Sockaddr_in
 
 template ip4InitEndpoint() {.dirty.} =
   result = IP4EndpointImpl:

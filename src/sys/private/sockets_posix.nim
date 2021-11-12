@@ -102,7 +102,7 @@ template ip4Word() {.dirty.} =
 template ip4SetWord() {.dirty.} =
   ip.s_addr = w
 
-type IP4EndpointImpl {.borrow: `.`.} = distinct Sockaddr_in
+type IP4EndpointImpl {.requiresInit, borrow: `.`.} = distinct Sockaddr_in
 
 template ip4InitEndpoint() {.dirty.} =
   result = IP4EndpointImpl:
