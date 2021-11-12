@@ -31,10 +31,10 @@ proc makeSocket(domain, typ, proto: cint, flags: set[SockFlag] = {}): Handle[Soc
   when defined(macosx):
     # OSX does not support setting cloexec and nonblock on socket creation, so
     # it has to be done here.
-    setInheritable(result, false)
+    setInheritable(result.get, false)
 
     if sfNonBlock in flags:
-      setBlocking(result, false)
+      setBlocking(result.get, false)
 
   result = sock
 
