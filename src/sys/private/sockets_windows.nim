@@ -246,28 +246,33 @@ template tcpConnect() {.dirty.} =
   result = Conn[TCP] newSocket(sock)
 
 template tcpAsyncConnect() {.dirty.} =
-  var sock = initHandle:
+  # Use a bare AsyncSocket for this, so that on failure the FD is unregistered.
+  let sock = newAsyncSocket:
     SocketFD:
       WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, nil, 0, toWSAFlags({sfOverlapped}))
 
-  if sock.get == InvalidFD:
+  if sock.fd == InvalidFD:
     raise newOSError(WSAGetLastError(), $Error.Connect)
 
   # A local endpoint has to be bound into `sock` before ConnectEx can be used.
+  #
+  # Bind an "any" address to this so that the system can choose the best local
+  # address to use.
+  var empty = initEndpoint(IP4Any, PortNone)
   if `bind`(
-    wincore.Socket(sock.get),
-    cast[ptr sockaddr](unsafeAddr endpoint),
-    cint sizeof(endpoint)
+    wincore.Socket(sock.fd),
+    cast[ptr sockaddr](addr empty),
+    cint sizeof(empty)
   ) == SocketError:
-    raise newOSError(WSAGetLastError(), $Error.Listen)
+    raise newOSError(WSAGetLastError(), $Error.Connect)
 
   # Register `sock` into IOCP
-  persist(sock.get)
+  persist(sock.fd)
 
   let overlapped = new Overlapped
   var errorCode: DWORD = ErrorSuccess
   if ConnectEx(
-    wincore.Socket(sock.get),
+    wincore.Socket(sock.fd),
     cast[ptr sockaddr](unsafeAddr endpoint),
     cint sizeof(endpoint),
     nil,
@@ -279,13 +284,13 @@ template tcpAsyncConnect() {.dirty.} =
 
   if errorCode == WSAIoPending:
     # Wait for the operation to complete
-    wait(sock, overlapped)
+    wait(sock.fd, overlapped)
 
     # These are required by WSAGetOverlappedResult(), but unused in this
     # situation.
     var transferred, flags: DWORD
     if WSAGetOverlappedResult(
-      wincore.Socket(sock.get),
+      wincore.Socket(sock.fd),
       cast[ptr Overlapped](addr overlapped[]),
       addr transferred,
       fWait = wincore.False,
@@ -303,7 +308,7 @@ template tcpAsyncConnect() {.dirty.} =
   #
   # https://docs.microsoft.com/en-us/windows/win32/winsock/sol-socket-socket-options
   if setsockopt(
-    wincore.Socket(sock.get),
+    wincore.Socket(sock.fd),
     SolSocket,
     SoUpdateConnectContext,
     nil,
@@ -311,8 +316,7 @@ template tcpAsyncConnect() {.dirty.} =
   ) == SocketError:
     raise newOSError(WSAGetLastError(), $Error.Connect)
 
-  # A move has to be done in CPS
-  result = AsyncConn[TCP] newAsyncSocket(move sock)
+  result = AsyncConn[TCP] sock
 
 template tcpListen() {.dirty.} =
   var sock = initHandle:
