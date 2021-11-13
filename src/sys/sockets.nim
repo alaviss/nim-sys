@@ -86,6 +86,18 @@ proc close*(s: AsyncSocket) {.inline.} =
   ## The FD associated with `s` will be deregistered from `ioqueue`.
   close s[]
 
+# These are used to ensure correct destructor binding
+{.warning: "compiler bug workaround; see: https://github.com/nim-lang/Nim/issues/19138".}
+func newSocketAs(T: typedesc[not ref], fd: SocketFD): ref T {.inline.} =
+  ## Create a ref socket from `fd`, converted to `T`.
+  new result
+  result[] = T SocketObj(handle: initHandle(fd))
+
+func newSocketAs(T: typedesc[not ref], handle: sink Handle[SocketFD]): ref T {.inline.} =
+  ## Create a ref socket from `handle`, converted to `T`.
+  new result
+  result[] = T SocketObj(handle: handle)
+
 func newSocket*(fd: SocketFD): Socket {.inline.} =
   ## Creates a new `Socket` from an opened socket handle.
   ##
@@ -99,7 +111,7 @@ func newSocket*(fd: SocketFD): Socket {.inline.} =
   ## - On Windows, sockets created via Winsock `socket()` function are opened
   ##   in overlapped mode and should be passed to `newAsyncSocket
   ##   <#newAsyncSocket.SocketFD>` instead.
-  Socket(handle: initHandle(fd))
+  newSocketAs(SocketObj, fd)
 
 func newAsyncSocket*(fd: SocketFD): AsyncSocket {.inline.} =
   ## Creates a new `AsyncSocket` from an opened socket handle.
@@ -114,7 +126,7 @@ func newAsyncSocket*(fd: SocketFD): AsyncSocket {.inline.} =
   ## - On POSIX, it is assumed that `fd` is opened with `O_NONBLOCK` set.
   ##
   ## - On Windows, it is assumed that `fd` is opened in overlapped mode.
-  AsyncSocket newSocket(fd)
+  newSocketAs(AsyncSocketObj, fd)
 
 func newSocket*(handle: sink Handle[SocketFD]): Socket {.inline.} =
   ## Creates a new `Socket` from an opened socket handle.
@@ -129,7 +141,7 @@ func newSocket*(handle: sink Handle[SocketFD]): Socket {.inline.} =
   ## - On Windows, sockets created via Winsock `socket()` function are opened
   ##   in overlapped mode and should be passed to `newAsyncSocket
   ##   <#newAsyncSocket.SocketFD>` instead.
-  Socket(handle: handle)
+  newSocketAs(SocketObj, handle)
 
 func newAsyncSocket*(handle: sink Handle[SocketFD]): AsyncSocket {.inline.} =
   ## Creates a new `AsyncSocket` from an opened socket handle.
@@ -144,7 +156,7 @@ func newAsyncSocket*(handle: sink Handle[SocketFD]): AsyncSocket {.inline.} =
   ## - On POSIX, it is assumed that `fd` is opened with `O_NONBLOCK` set.
   ##
   ## - On Windows, it is assumed that `fd` is opened in overlapped mode.
-  AsyncSocket newSocket(handle)
+  newSocketAs(AsyncSocketObj, handle)
 
 template derive(T, Base: typedesc): untyped =
   ## Template to mass-borrow socket operations.
