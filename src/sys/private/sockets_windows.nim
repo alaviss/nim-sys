@@ -14,7 +14,7 @@ import errors
 
 func ioSize(x: int): ULONG {.inline.} =
   ## Clamp `x` to the IO size supported by Winsock.
-  DWORD min(x, high(ULONG))
+  ULONG min(x, high(ULONG))
 
 template readImpl() {.dirty.} =
   var
