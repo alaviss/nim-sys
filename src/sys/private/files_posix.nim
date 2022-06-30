@@ -31,11 +31,11 @@ template newAsyncFileImpl() {.dirty.} =
   result = AsyncFile newFile(fd)
 
 template getFDImpl() {.dirty.} =
-  result = get f.handle
+  result = f.handle.fd
 
 template takeFDImpl() {.dirty.} =
   cleanupFile f
-  result = take f.handle
+  result = f.handle.takeFd
 
 proc commonRead(fd: FD, buf: pointer, len: Natural): int {.inline.} =
   ## A wrapper around posix.read() to retry on EINTR.

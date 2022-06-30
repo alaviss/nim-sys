@@ -34,3 +34,9 @@ template setInheritableImpl() {.dirty.} =
       raise newOSError(GetLastError(), ErrorSetInheritable)
   else:
     {.error: "setInheritable is not available for this variant of FD".}
+
+template getFdImpl() {.dirty.} =
+  cast[T](cast[uint](h.shiftedFd - 1))
+
+template setFdImpl() {.dirty.} =
+  h.shiftedFd = cast[FDImpl](cast[uint](fd) + 1)

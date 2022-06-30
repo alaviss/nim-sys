@@ -79,7 +79,7 @@ func toEvents(ev: Ev): set[Event] =
 proc queue(eq: var EventQueueImpl, cont: Continuation, fd: AnyFD, event: ReadyEvent) =
   var epEvent = epoll.Event(events: toEv({event}), data: Data(fd: fd.cint))
   # If adding `fd` to epoll fails
-  if eq.epoll.get.ctl(CtlAdd, fd, epEvent) == -1:
+  if eq.epoll.fd.ctl(CtlAdd, fd, epEvent) == -1:
     # In case `fd` was already registered
     if errno == EEXIST:
       # If there is a waiter in the queue
@@ -88,7 +88,7 @@ proc queue(eq: var EventQueueImpl, cont: Continuation, fd: AnyFD, event: ReadyEv
         raise newException(ValueError, $Error.QueuedFD % $fd.cint)
 
       # Otherwise re-register our event
-      posixChk eq.epoll.get.ctl(CtlMod, fd, epEvent), $Error.Queue
+      posixChk eq.epoll.fd.ctl(CtlMod, fd, epEvent), $Error.Queue
     else:
       posixChk -1, $Error.Queue
 
@@ -120,7 +120,7 @@ template pollImpl() {.dirty.} =
   eq.eventBuffer.setLen eq.waiters.len
 
   # Obtain the events that are ready
-  let selected = eq.epoll.get.wait(eq.eventBuffer, timeout)
+  let selected = eq.epoll.fd.wait(eq.eventBuffer, timeout)
   posixChk selected, $Error.Poll
   # Set the length of the buffer to the amount of events received
   eq.eventBuffer.setLen selected
@@ -161,7 +161,7 @@ template unregisterImpl() {.dirty.} =
   # If the FD is in the waiter list
   if fd in eq.waiters:
     # Deregister it from epoll
-    let status = eq.epoll.get.ctl(CtlDel, fd, nil)
+    let status = eq.epoll.fd.ctl(CtlDel, fd, nil)
     if status == -1:
       # If the FD is in the waiter list but epoll said that it's never
       # registered or that it's invalid, then its already closed before being

@@ -58,7 +58,7 @@ proc write*[T: byte or char](fd: Handle[FD], data: openArray[T]) {.sync.} =
   ## Write all bytes in `data` into `fd`.
   var totalWritten = 0
   while totalWritten < data.len:
-    let written = write(fd.get.cint, data[totalWritten].unsafeAddr, data.len - totalWritten)
+    let written = write(fd.fd.cint, data[totalWritten].unsafeAddr, data.len - totalWritten)
     case written
     of -1:
       raise newIOError(totalWritten, errno.int32)
@@ -69,7 +69,7 @@ proc read*[T: byte or char](fd: Handle[FD], buf: var openArray[T]): int {.sync.}
   ## Read all bytes from `fd` into `buf` until it's filled or there is
   ## nothing left to read
   while result < buf.len:
-    let readBytes = read(fd.get.cint, buf[result].addr, buf.len - result)
+    let readBytes = read(fd.fd.cint, buf[result].addr, buf.len - result)
     case readBytes
     of -1:
       raise newIOError(result, errno.int32)
@@ -87,14 +87,14 @@ proc readAsync*(rd: ref Handle[FD], buf: ref string) {.asyncio.} =
   ## information outside of cps yet
   when defined(windows):
     let overlapped = new Overlapped
-    persist(rd.get)
+    persist(rd.fd)
     if ReadFile(
-      winim.Handle(rd.get), addr buf[0], DWORD(buf.len), nil,
+      winim.Handle(rd.fd), addr buf[0], DWORD(buf.len), nil,
       addr overlapped[]
     ) == winim.FALSE:
       let errorCode = GetLastError()
       if errorCode == ErrorIoPending:
-        wait(rd.get, overlapped)
+        wait(rd.fd, overlapped)
       else:
         discard "Error handling below"
     let errorCode = DWORD(overlapped.Internal)
@@ -115,7 +115,7 @@ proc readAsync*(rd: ref Handle[FD], buf: ref string) {.asyncio.} =
         e.bytesTransferred += offset
         if e.errorCode == EAGAIN:
           offset = e.bytesTransferred
-          wait rd.get, Read
+          wait rd.fd, Read
         else:
           raise e
 
@@ -123,14 +123,14 @@ proc writeAsync*(wr: ref Handle[FD], buf: string) {.asyncio.} =
   ## Write all bytes in `buf` into `wr` asynchronously
   when defined(windows):
     let overlapped = new Overlapped
-    persist(wr.get)
+    persist(wr.fd)
     if WriteFile(
-      winim.Handle(wr.get), unsafeAddr buf[0], DWORD(buf.len), nil,
+      winim.Handle(wr.fd), unsafeAddr buf[0], DWORD(buf.len), nil,
       addr overlapped[]
     ) == winim.FALSE:
       let errorCode = GetLastError()
       if errorCode == ErrorIoPending:
-        wait(wr.get, overlapped)
+        wait(wr.fd, overlapped)
       else:
         discard "Error handling below"
     let errorCode = DWORD(overlapped.Internal)
@@ -148,6 +148,6 @@ proc writeAsync*(wr: ref Handle[FD], buf: string) {.asyncio.} =
         e.bytesTransferred += offset
         if e.errorCode == EAGAIN:
           offset = e.bytesTransferred
-          wait wr.get, Write
+          wait wr.fd, Write
         else:
           raise e

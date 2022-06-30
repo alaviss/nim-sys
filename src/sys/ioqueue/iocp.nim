@@ -102,7 +102,7 @@ proc poll(runnable: var seq[Continuation], timeout = none(Duration)) {.used.} =
   # Obtain completion events
   var selected: ULONG
   if GetQueuedCompletionStatusEx(
-    wincore.Handle(eq.iocp.get), addr eq.eventBuffer[0], ULONG(eq.eventBuffer.len),
+    wincore.Handle(eq.iocp.fd), addr eq.eventBuffer[0], ULONG(eq.eventBuffer.len),
     addr selected, timeout, wincore.FALSE
   ) == wincore.FALSE:
     let errorCode = GetLastError()
@@ -150,7 +150,7 @@ proc persist(fd: AnyFD) {.raises: [OSError].} =
 
   # Register the handle with IOCP
   if CreateIoCompletionPort(
-    wincore.Handle(fd), wincore.Handle(eq.iocp.get), ULongPtr(fd), 0
+    wincore.Handle(fd), wincore.Handle(eq.iocp.fd), ULongPtr(fd), 0
   ) == wincore.Handle(0):
     let errorCode = GetLastError()
 
