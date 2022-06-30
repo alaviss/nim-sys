@@ -46,11 +46,11 @@ template newAsyncFileImpl() {.dirty.} =
   result[] = AsyncFileImpl fileImpl
 
 template getFDImpl() {.dirty.} =
-  result = get f.handle
+  result = f.handle.fd
 
 template takeFDImpl() {.dirty.} =
   cleanupFile f
-  result = take f.handle
+  result = f.handle.takeFd
 
 proc initOverlapped(f: FileImpl, o: var Overlapped) {.inline.} =
   ## Initialize an overlapped object for I/O operations on `f`

@@ -191,6 +191,6 @@ proc unregister*(fd: AnyFD) =
   ##   *after* it and its duplicates are closed.
   unregisterImpl()
 
-proc unregister*(fd: Handle[AnyFD]) =
+proc unregister*(handle: Handle[AnyFD]) =
   ## An overload of `unregister` for `Handle`
-  ioqueue.unregister(fd.get)
+  ioqueue.unregister(handle.fd)

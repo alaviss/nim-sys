@@ -33,25 +33,28 @@ suite "Test close() and Handle[T] destructions":
     expectDefect:
       close(SocketFD InvalidFD)
 
-  test "Handle[T] not destroyed before construction":
-    skip("nim-lang/Nim#16607")
+  test "Handle[T] initializes to invalid":
+    var handle: Handle[FD]
 
-    when not compileOption("assertions"):
-      skip("assertions are disabled")
+    check handle.fd == InvalidFD
 
-    proc pair(): tuple[a, b: Handle[FD]] =
-      result.a = initHandle(FD InvalidFD)
-      result.b = initHandle(FD InvalidFD)
+  test "Handle[T] can store the highest handle possible correctly":
+    const MaxFD =
+      when defined(posix):
+        FD(high cint)
+      elif defined(windows):
+        cast[FD](high uint)
+      else:
+        {.error: "A maximum FD is not defined for this platform".}
 
-    discard pair()
+    var handle = initHandle(MaxFD)
 
-    proc pairRef(): tuple[a, b: ref Handle[FD]] =
-      result.a = newHandle(FD InvalidFD)
-      result.b = newHandle(FD InvalidFD)
-
-    discard pairRef()
-    when declared(GC_fullCollect):
-      GC_fullCollect()
+    try:
+      check handle.fd == MaxFD
+    finally:
+      # This handle is also invalid, so remove it to prevent Handle[T] from
+      # trying to close it.
+      discard handle.takeFd()
 
   var
     rd = FD InvalidFD
@@ -92,4 +95,4 @@ suite "Test close() and Handle[T] destructions":
     expectDefect:
       close hrd
 
-    check hrd.get == InvalidFD
+    check hrd.fd == InvalidFD

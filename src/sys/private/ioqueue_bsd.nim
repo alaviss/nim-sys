@@ -90,7 +90,7 @@ proc queue(eq: var EventQueueImpl, cont: Continuation, fd: FD, event: ReadyEvent
     flags: EvAdd or EvEnable or EvDispatch
   )
 
-  posixChk eq.kqueue.get.kevent(changeList = [kevent]), $Error.Queue
+  posixChk eq.kqueue.fd.kevent(changeList = [kevent]), $Error.Queue
   eq.waiters[fd] = Waiter(cont: cont, event: event)
 
 func toTimespec(d: Duration): Timespec =
@@ -109,9 +109,9 @@ template pollImpl() {.dirty.} =
   # Obtain events from kevent
   let nevents =
     if timeout.isNone:
-      eq.kqueue.get.kevent(eventList = eq.eventBuffer)
+      eq.kqueue.fd.kevent(eventList = eq.eventBuffer)
     else:
-      eq.kqueue.get.kevent(
+      eq.kqueue.fd.kevent(
         eventList = eq.eventBuffer,
         timeout = toTimespec(timeout.get)
       )
@@ -155,7 +155,7 @@ template unregisterImpl() {.dirty.} =
   # If the FD is in the waiter list
   if fd in eq.waiters:
     # Deregister it from kqueue
-    let status = eq.kqueue.get.kevent([
+    let status = eq.kqueue.fd.kevent([
       # kqueue map events using a tuple of filter & identifier, so we
       # need to reproduce both to delete the event that we want.
       Kevent(ident: Ident(fd), filter: toFilter(eq.waiters[fd].event),

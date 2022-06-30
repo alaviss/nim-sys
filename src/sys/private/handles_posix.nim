@@ -43,6 +43,17 @@ template setBlockingImpl() {.dirty.} =
     flags = flags or O_NONBLOCK
   posixChk fcntl(fd.cint, F_SETFL, flags), ErrorSetBlocking
 
+template getFdImpl() {.dirty.} =
+  cast[T](cast[cuint](h.shiftedFd) - 1)
+
+template setFdImpl() {.dirty.} =
+  # The FD is casted to unsigned so that `high(cint)` can be mapped forward
+  # correctly.
+  #
+  # As all architectures running Linux uses two's complement, this also handles
+  # InvalidFD -> 0 correctly.
+  h.shiftedFd = cast[FDImpl](cast[cuint](fd) + 1)
+
 when false:
   # NOTE: Staged until process spawning is added.
   template duplicateImpl() {.dirty.} =
