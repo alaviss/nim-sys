@@ -6,8 +6,6 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
-{.experimental: "implicitDeref".}
-
 import system except io
 import handles, ioqueue
 import private/errors
@@ -64,7 +62,7 @@ proc newIOError*(bytesTransferred: Natural, errorCode: int32,
                  additionalInfo = ""): ref IOError =
   ## Creates a new `ref IOError`.
   result = new IOError
-  result.initIOError(bytesTransferred, errorCode, additionalInfo)
+  result[].initIOError(bytesTransferred, errorCode, additionalInfo)
 
 proc `=copy`*(dest: var FileImpl, src: FileImpl) {.error.}
   ## Copying a `File` is not allowed. If multiple references to the same file
@@ -205,8 +203,8 @@ proc read*(f: AsyncFile, b: ref string): int {.asyncio.} =
   ## `read() <#read,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please refer
   ## to its documentation for more information.
   assert(not b.isNil, "The provided buffer must not be nil")
-  if b.len > 0:
-    read(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  if b[].len > 0:
+    read(f, cast[ptr UncheckedArray[byte]](addr b[][0]), b[].len)
   else:
     read(f, nil, 0)
 
@@ -217,8 +215,8 @@ proc read*(f: AsyncFile, b: ref seq[byte]): int {.asyncio.} =
   ## `read() <#read,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please refer
   ## to its documentation for more information.
   assert(not b.isNil, "The provided buffer must not be nil")
-  if b.len > 0:
-    read(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  if b[].len > 0:
+    read(f, cast[ptr UncheckedArray[byte]](addr b[][0]), b[].len)
   else:
     read(f, nil, 0)
 
@@ -291,8 +289,8 @@ proc write*(f: AsyncFile, b: ref string): int {.asyncio.} =
   ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
   ## refer to its documentation for more information.
   assert(not b.isNil, "The provided buffer must not be nil")
-  if b.len > 0:
-    write(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  if b[].len > 0:
+    write(f, cast[ptr UncheckedArray[byte]](addr b[][0]), b[].len)
   else:
     write(f, nil, 0)
 
@@ -315,7 +313,7 @@ proc write*(f: AsyncFile, b: ref seq[byte]): int {.asyncio.} =
   ## `write() <#write,AsyncFile,ptr.UncheckedArray[byte],Natural>`_, please
   ## refer to its documentation for more information.
   assert(not b.isNil, "The provided buffer must not be nil")
-  if b.len > 0:
-    write(f, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+  if b[].len > 0:
+    write(f, cast[ptr UncheckedArray[byte]](addr b[][0]), b[].len)
   else:
     write(f, nil, 0)

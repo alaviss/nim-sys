@@ -107,7 +107,7 @@ template asyncReadImpl() {.dirty.} =
   let overlapped = new Overlapped
 
   # Prepare the OVERLAPPED structure
-  f.File.initOverlapped(overlapped[])
+  f.File[].initOverlapped(overlapped[])
 
   var
     errorCode: DWORD = ErrorSuccess
@@ -170,7 +170,7 @@ template asyncWriteImpl() {.dirty.} =
   let overlapped = new Overlapped
 
   # Prepare the OVERLAPPED structure
-  f.File.initOverlapped(overlapped[])
+  f.File[].initOverlapped(overlapped[])
 
   var
     errorCode: DWORD = ErrorSuccess

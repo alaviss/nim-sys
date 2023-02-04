@@ -7,8 +7,6 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
-{.experimental: "implicitDeref".}
-
 from std/os import osErrorMsg, OSErrorCode
 from syscall/posix import errno
 
@@ -27,7 +25,7 @@ template initOSError*(e: var OSError, errorCode: int32,
 
 proc newOSError*(errorCode: int32, additionalInfo = ""): ref OSError {.inline.} =
   result = new OSError
-  result.initOSError(errorCode, additionalInfo)
+  result[].initOSError(errorCode, additionalInfo)
 
 template posixChk*(op: untyped, errmsg: string = ""): untyped =
   ## Check whether the operation finished without error.
