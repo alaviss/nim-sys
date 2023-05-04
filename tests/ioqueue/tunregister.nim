@@ -1,5 +1,3 @@
-{.experimental: "implicitDeref".}
-
 import pkg/[cps, balls]
 import sys/[handles, ioqueue]
 
@@ -9,11 +7,11 @@ suite "Unregistering FD from queue":
   test "Unregistering FD prevents its continuation from being run":
     let (rd, wr) = newAsyncPipe()
     defer:
-      close rd
+      close rd[]
 
     proc tester() {.asyncio.} =
       let buf = new string
-      buf.setLen 1
+      buf[].setLen 1
       readAsync(rd, buf)
       fail "This code should not be run"
 
@@ -21,10 +19,10 @@ suite "Unregistering FD from queue":
     tester()
 
     # Close the write side, which will unblock the pipe
-    close wr
+    close wr[]
 
     # Unregister the pipe
-    unregister rd
+    unregister rd[]
 
     # Run the queue, the proc should not continue
     run()

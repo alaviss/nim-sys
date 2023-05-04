@@ -1,5 +1,3 @@
-{.experimental: "implicitDeref".}
-
 import std/[os, strutils]
 import pkg/balls
 import sys/[ioqueue, handles]
@@ -18,11 +16,11 @@ suite "Test queue":
   test "Multiple waiters for read/write":
     var (rd, wr) = newAsyncPipe()
     defer:
-      unregister rd
-      unregister wr
+      unregister rd[]
+      unregister wr[]
 
     var str = new string
-    str.setLen(BigTestData.len)
+    str[].setLen(BigTestData.len)
 
     # Start the reader, it will suspend because there's nothing to read
     rd.readAsync(str)
@@ -34,4 +32,4 @@ suite "Test queue":
     # Let's run this mess
     run()
 
-    check str == BigTestData
+    check str[] == BigTestData

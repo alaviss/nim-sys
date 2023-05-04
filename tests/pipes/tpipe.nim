@@ -4,8 +4,6 @@ import pkg/balls
 import sys/[pipes, files, private/syscall/posix, ioqueue]
 import ".."/helpers/io
 
-{.experimental: "implicitDeref".}
-
 const Delimiter = "\c\l\c\l"
   # The HTTP delimiter
 
@@ -121,9 +119,9 @@ suite "Test Pipe read/write behaviors":
   test "Pipe long read/write":
     proc writeWorker(wr: ptr WritePipe) {.thread.} =
       {.gcsafe.}:
-        wr.accumlatedWrite TestBufferedData
+        wr[].accumlatedWrite TestBufferedData
         # Signal that we are done
-        close wr
+        close wr[]
 
     var (rd, wr) = newPipe()
     var thr: Thread[ptr WritePipe]
@@ -160,7 +158,7 @@ suite "Test Pipe read/write behaviors":
   test "Sync read and async write test":
     proc readWorker(rd: ptr ReadPipe) {.thread.} =
       {.gcsafe.}:
-        check rd.accumlatedRead(TestBufferedData.len + 1024) == TestBufferedData
+        check rd[].accumlatedRead(TestBufferedData.len + 1024) == TestBufferedData
 
     var (rd, wr) = newPipe(Wr = AsyncWritePipe)
     var thr: Thread[ptr ReadPipe]
@@ -185,9 +183,9 @@ suite "Test Pipe read/write behaviors":
   test "Async read and sync write test":
     proc writeWorker(wr: ptr WritePipe) {.thread.} =
       {.gcsafe.}:
-        wr.accumlatedWrite TestBufferedData
+        wr[].accumlatedWrite TestBufferedData
         # Signal that we are done
-        close wr
+        close wr[]
 
     var (rd, wr) = newPipe(Rd = AsyncReadPipe)
     var thr: Thread[ptr WritePipe]
@@ -209,7 +207,7 @@ suite "Test Pipe read/write behaviors":
   test "Pipe delimited read / write":
     proc writeWorker(wr: ptr WritePipe) {.thread.} =
       {.gcsafe.}:
-        wr.accumlatedWrite TestDelimitedData
+        wr[].accumlatedWrite TestDelimitedData
 
     var (rd, wr) = newPipe()
     var thr: Thread[ptr WritePipe]
@@ -244,7 +242,7 @@ suite "Test Pipe read/write behaviors":
   test "Pipe delimited read / AsyncPipe write":
     proc readWorker(rd: ptr ReadPipe) {.thread.} =
       {.gcsafe.}:
-        check rd.delimitedRead(Delimiter) == TestDelimitedData
+        check rd[].delimitedRead(Delimiter) == TestDelimitedData
 
     var (rd, wr) = newPipe(Wr = AsyncWritePipe)
     var thr: Thread[ptr ReadPipe]
@@ -267,7 +265,7 @@ suite "Test Pipe read/write behaviors":
   test "AsyncPipe delimited read / Pipe write":
     proc writeWorker(wr: ptr WritePipe) {.thread.} =
       {.gcsafe.}:
-        wr.accumlatedWrite TestDelimitedData
+        wr[].accumlatedWrite TestDelimitedData
 
     var (rd, wr) = newPipe(Rd = AsyncReadPipe)
     var thr: Thread[ptr WritePipe]
