@@ -8,8 +8,6 @@
 
 ## Abstractions for networking operations over sockets.
 
-{.experimental: "implicitDeref".}
-
 import system except IOError
 
 import std/[genasts, macros, options]
@@ -41,14 +39,14 @@ func fd*(s: AnySocket): SocketFD {.inline.} =
   ## Returns the handle held by `s`.
   ##
   ## The returned `SocketFD` will stay valid for the duration of `s`.
-  get s.handle
+  s.handle.fd
 
 func takeFD*(s: AnySocket): SocketFD {.inline.} =
   ## Returns the file handle held by `s` and release ownership to the caller.
   ## `s` will be invalidated.
   ##
   ## If `s` is asynchronous, it will *not* be unregistered from the queue.
-  take s.handle
+  takeFd s.handle
 
 proc close(s: var SocketObj) {.inline.} =
   ## Closes and invalidates the socket `s`.
@@ -60,7 +58,7 @@ proc close(s: var AsyncSocketObj) {.inline.}
 
 proc `=destroy`(s: var AsyncSocketObj) =
   ## Destroy the asynchronous socket `s`.
-  if s.handle.get != InvalidFD:
+  if s.handle.fd != InvalidFD:
     close(s)
 
 proc close(s: var AsyncSocketObj) {.inline.} =
@@ -69,7 +67,7 @@ proc close(s: var AsyncSocketObj) {.inline.} =
   ## If `s` is invalid, `ClosedHandleDefect` will be raised.
   ##
   ## The FD associated with `s` will be deregistered from `ioqueue`.
-  unregister s.handle.get
+  unregister s.handle.fd
   close SocketObj(s)
 
 proc close*(s: Socket) {.inline.} =
@@ -260,8 +258,8 @@ macro implGenericAsyncConn(): untyped =
           ##
           ## This is an overload of read(s, buf, bufLen), plese refer to its
           ## documentation for more information.
-          if b.len > 0:
-            read(s, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+          if b[].len > 0:
+            read(s, cast[ptr UncheckedArray[byte]](addr b[][0]), b[].len)
           else:
             read(s, nil, 0)
 
@@ -270,8 +268,8 @@ macro implGenericAsyncConn(): untyped =
           ##
           ## This is an overload of read(s, buf, bufLen), plese refer to its
           ## documentation for more information.
-          if b.len > 0:
-            read(s, cast[ptr UncheckedArray[byte]](addr b[0]), b.len)
+          if b[].len > 0:
+            read(s, cast[ptr UncheckedArray[byte]](addr b[][0]), b[].len)
           else:
             read(s, nil, 0)
 
@@ -322,8 +320,8 @@ macro implGenericAsyncConn(): untyped =
           ##
           ## This is an overload of write(s, buf, bufLen), plese refer to its
           ## documentation for more information.
-          if b.len > 0:
-            write(s, cast[ptr UncheckedArray[byte]](unsafeAddr b[0]), b.len)
+          if b[].len > 0:
+            write(s, cast[ptr UncheckedArray[byte]](unsafeAddr b[][0]), b[].len)
           else:
             write(s, nil, 0)
 
@@ -332,8 +330,8 @@ macro implGenericAsyncConn(): untyped =
           ##
           ## This is an overload of write(s, buf, bufLen), plese refer to its
           ## documentation for more information.
-          if b.len > 0:
-            write(s, cast[ptr UncheckedArray[byte]](unsafeAddr b[0]), b.len)
+          if b[].len > 0:
+            write(s, cast[ptr UncheckedArray[byte]](unsafeAddr b[][0]), b[].len)
           else:
             write(s, nil, 0)
 

@@ -25,16 +25,16 @@ proc makeSocket(domain, typ, proto: cint, flags: set[SockFlag] = {}): Handle[Soc
       stype = stype or SOCK_NONBLOCK
 
   let sock = initHandle: SocketFD socket(domain, stype, proto)
-  if sock.get == InvalidFD:
+  if sock.fd == InvalidFD:
     raise newOSError(errno)
 
   when defined(macosx):
     # OSX does not support setting cloexec and nonblock on socket creation, so
     # it has to be done here.
-    setInheritable(sock.get, false)
+    setInheritable(sock.fd, false)
 
     if sfNonBlock in flags:
-      setBlocking(sock.get, false)
+      setBlocking(sock.fd, false)
 
   result = sock
 
@@ -182,19 +182,19 @@ template tcpConnect() {.dirty.} =
   let sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
 
   if connect(
-    SocketHandle(sock.get),
+    SocketHandle(sock.fd),
     cast[ptr Sockaddr](unsafeAddr endpoint),
     SockLen sizeof(endpoint)
   ) == -1:
     # On EINTR, the connection will be done asynchronously
     if errno == EINTR:
       # Block until its done
-      var pollfd = TPollfd(fd: sock.get.cint, events: PollOut)
+      var pollfd = TPollfd(fd: sock.fd.cint, events: PollOut)
       let pollRet = retryOnEIntr: poll(addr pollfd, 1, -1)
       if pollRet == -1:
         raise newOSError(errno, $Error.Connect)
 
-      handleAsyncConnectResult(sock.get)
+      handleAsyncConnectResult(sock.fd)
     else:
       raise newOSError(errno, $Error.Connect)
 
@@ -205,7 +205,7 @@ template tcpAsyncConnect() {.dirty.} =
   var sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
 
   if connect(
-    SocketHandle(sock.get),
+    SocketHandle(sock.fd),
     cast[ptr Sockaddr](unsafeAddr endpoint),
     SockLen sizeof(endpoint)
   ) == -1:
@@ -214,7 +214,7 @@ template tcpAsyncConnect() {.dirty.} =
       # Wait until the socket is writable, which is when it is "connected" (see connect(3p)).
       wait(sock, Event.Write)
 
-      handleAsyncConnectResult(sock.get)
+      handleAsyncConnectResult(sock.fd)
     else:
       raise newOSError(errno, $Error.Connect)
 
@@ -240,14 +240,14 @@ template tcpListen() {.dirty.} =
 
   # Bind the address to the socket
   posixChk bindSocket(
-    SocketHandle(sock.get),
+    SocketHandle(sock.fd),
     cast[ptr SockAddr](unsafeAddr endpoint),
     SockLen sizeof(endpoint)
   ):
     $Error.Listen
 
   # Mark the socket as accepting connections
-  posixChk listen(SocketHandle(sock.get), backlog.get(maxBacklog()).cint):
+  posixChk listen(SocketHandle(sock.fd), backlog.get(maxBacklog()).cint):
     $Error.Listen
 
   result = Listener[TCP] newSocket(sock)
@@ -256,7 +256,7 @@ template tcpAsyncListen() {.dirty.} =
   var sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
 
   if bindSocket(
-    SocketHandle(sock.get),
+    SocketHandle(sock.fd),
     cast[ptr SockAddr](unsafeAddr endpoint),
     SockLen sizeof(endpoint)
   ) == -1:
@@ -272,7 +272,7 @@ template tcpAsyncListen() {.dirty.} =
         error: cint
         errorLen = SockLen sizeof(error)
       posixChk getsockopt(
-        SocketHandle(sock.get), SOL_SOCKET, SO_ERROR, addr error, addr errorLen
+        SocketHandle(sock.fd), SOL_SOCKET, SO_ERROR, addr error, addr errorLen
       ):
         $Error.Connect
 
@@ -286,7 +286,7 @@ template tcpAsyncListen() {.dirty.} =
       raise newOSError(errno, $Error.Listen)
 
   # Mark the socket as accepting connections
-  posixChk listen(SocketHandle(sock.get), backlog.get(maxBacklog()).cint):
+  posixChk listen(SocketHandle(sock.fd), backlog.get(maxBacklog()).cint):
     $Error.Listen
 
   # An explicit move has to be done in CPS
@@ -326,7 +326,7 @@ proc commonAccept[T](fd: SocketFD, remoteAddr: var T,
           )
 
   # Exit if accept failed
-  if conn.get == InvalidFD:
+  if conn.fd == InvalidFD:
     return
 
   # TODO: Remove this once IPv6 support lands
@@ -339,17 +339,17 @@ proc commonAccept[T](fd: SocketFD, remoteAddr: var T,
 
   when not declared(accept4):
     # On systems without accept4, flags have to be set manually.
-    conn.get.setInheritable(false)
+    conn.fd.setInheritable(false)
 
     if sfNonBlock in flags:
-      conn.get.setBlocking(false)
+      conn.fd.setBlocking(false)
 
   # Return the connection
   result = conn
 
 template tcpAccept() {.dirty.} =
   let conn = commonAccept[IP4Endpoint](l.fd, result.remote)
-  if conn.get == InvalidFD:
+  if conn.fd == InvalidFD:
     raise newOSError(errno, $Error.Accept)
 
   result.conn = Conn[TCP] newSocket(conn)
@@ -359,7 +359,7 @@ template tcpAsyncAccept() {.dirty.} =
   while true:
     var conn = commonAccept[IP4Endpoint](l.fd, result.remote, {sfNonBlock})
 
-    if conn.get == InvalidFD:
+    if conn.fd == InvalidFD:
       # If the socket signals that no connections are pending
       if errno == EAGAIN or errno == EWOULDBLOCK:
         # Wait until some shows up then try again

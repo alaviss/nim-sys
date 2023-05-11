@@ -168,7 +168,7 @@ proc wait*(c; fd: AnyFD, event: ReadyEvent): Continuation {.cpsMagic.} =
 
 proc wait*(c; fd: Handle[AnyFD], event: ReadyEvent): Continuation {.cpsMagic.} =
   ## An overload of `wait` for `Handle`.
-  ioqueue.wait(c, fd.get, event)
+  ioqueue.wait(c, fd.fd, event)
 
 when not declared(unregisterImpl):
   template unregisterImpl() {.dirty.} =
