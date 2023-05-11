@@ -46,7 +46,7 @@ type
     id*: int ## The unique ID of the resource, typically the resource handle,
              ## but is dependant on the target operating system.
 
-func newPrematureCloseDefect*(id: int): ref PrematureCloseDefect =
+proc newPrematureCloseDefect*(id: int): ref PrematureCloseDefect =
   ## Creates a `PrematureCloseDefect`
   result = newException(PrematureCloseDefect):
     "Resource id " & $id & " was invalidated before its unregistered"
