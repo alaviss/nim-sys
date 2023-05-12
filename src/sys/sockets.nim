@@ -86,17 +86,17 @@ proc close*(s: AsyncSocket) {.inline.} =
 
 # These are used to ensure correct destructor binding
 {.warning: "compiler bug workaround; see: https://github.com/nim-lang/Nim/issues/19138".}
-func newSocketAs(T: typedesc[not ref], fd: SocketFD): ref T {.inline.} =
+proc newSocketAs(T: typedesc[not ref], fd: SocketFD): ref T {.inline.} =
   ## Create a ref socket from `fd`, converted to `T`.
   new result
   result[] = T SocketObj(handle: initHandle(fd))
 
-func newSocketAs(T: typedesc[not ref], handle: sink Handle[SocketFD]): ref T {.inline.} =
+proc newSocketAs(T: typedesc[not ref], handle: sink Handle[SocketFD]): ref T {.inline.} =
   ## Create a ref socket from `handle`, converted to `T`.
   new result
   result[] = T SocketObj(handle: handle)
 
-func newSocket*(fd: SocketFD): Socket {.inline.} =
+proc newSocket*(fd: SocketFD): Socket {.inline.} =
   ## Creates a new `Socket` from an opened socket handle.
   ##
   ## The ownership of the handle will be transferred to the resulting `Socket`.
@@ -111,7 +111,7 @@ func newSocket*(fd: SocketFD): Socket {.inline.} =
   ##   <#newAsyncSocket.SocketFD>` instead.
   newSocketAs(SocketObj, fd)
 
-func newAsyncSocket*(fd: SocketFD): AsyncSocket {.inline.} =
+proc newAsyncSocket*(fd: SocketFD): AsyncSocket {.inline.} =
   ## Creates a new `AsyncSocket` from an opened socket handle.
   ##
   ## The ownership of the handle will be transferred to the resulting `Socket`.
@@ -126,7 +126,7 @@ func newAsyncSocket*(fd: SocketFD): AsyncSocket {.inline.} =
   ## - On Windows, it is assumed that `fd` is opened in overlapped mode.
   newSocketAs(AsyncSocketObj, fd)
 
-func newSocket*(handle: sink Handle[SocketFD]): Socket {.inline.} =
+proc newSocket*(handle: sink Handle[SocketFD]): Socket {.inline.} =
   ## Creates a new `Socket` from an opened socket handle.
   ##
   ## The ownership of the handle will be transferred to the resulting `Socket`.
@@ -141,7 +141,7 @@ func newSocket*(handle: sink Handle[SocketFD]): Socket {.inline.} =
   ##   <#newAsyncSocket.SocketFD>` instead.
   newSocketAs(SocketObj, handle)
 
-func newAsyncSocket*(handle: sink Handle[SocketFD]): AsyncSocket {.inline.} =
+proc newAsyncSocket*(handle: sink Handle[SocketFD]): AsyncSocket {.inline.} =
   ## Creates a new `AsyncSocket` from an opened socket handle.
   ##
   ## The ownership of the handle will be transferred to the resulting `Socket`.
