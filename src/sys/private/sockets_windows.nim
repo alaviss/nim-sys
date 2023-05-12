@@ -247,11 +247,11 @@ template tcpConnect() {.dirty.} =
     SocketFD:
       WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, nil, 0, toWSAFlags({}))
 
-  if sock.get == InvalidFD:
+  if sock.fd == InvalidFD:
     raise newOSError(WSAGetLastError(), $Error.Connect)
 
   if connect(
-    wincore.Socket(sock.get),
+    wincore.Socket(sock.fd),
     cast[ptr sockaddr](unsafeAddr endpoint),
     cint sizeof(endpoint)
   ) == SocketError:
@@ -337,12 +337,12 @@ template tcpListen() {.dirty.} =
     SocketFD:
       WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, nil, 0, toWSAFlags({}))
 
-  if sock.get == InvalidFD:
+  if sock.fd == InvalidFD:
     raise newOSError(WSAGetLastError(), $Error.Listen)
 
   # Bind the address to the socket
   if `bind`(
-    wincore.Socket(sock.get),
+    wincore.Socket(sock.fd),
     cast[ptr sockaddr](unsafeAddr endpoint),
     cint sizeof(endpoint)
   ) == SocketError:
@@ -350,7 +350,7 @@ template tcpListen() {.dirty.} =
 
   # Mark the socket as accepting connections
   if listen(
-    wincore.Socket(sock.get), backlog.get(SOMAXCONN).cint
+    wincore.Socket(sock.fd), backlog.get(SOMAXCONN).cint
   ) == SocketError:
     raise newOSError(WSAGetLastError(), $Error.Listen)
 
@@ -361,12 +361,12 @@ template tcpAsyncListen() {.dirty.} =
     SocketFD:
       WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, nil, 0, toWSAFlags({sfOverlapped}))
 
-  if sock.get == InvalidFD:
+  if sock.fd == InvalidFD:
     raise newOSError(WSAGetLastError(), $Error.Listen)
 
   # Bind the address to the socket
   if `bind`(
-    wincore.Socket(sock.get),
+    wincore.Socket(sock.fd),
     cast[ptr sockaddr](unsafeAddr endpoint),
     cint sizeof(endpoint)
   ) == SocketError:
@@ -374,7 +374,7 @@ template tcpAsyncListen() {.dirty.} =
 
   # Mark the socket as accepting connections
   if listen(
-    wincore.Socket(sock.get), backlog.get(SOMAXCONN).cint
+    wincore.Socket(sock.fd), backlog.get(SOMAXCONN).cint
   ) == SocketError:
     raise newOSError(WSAGetLastError(), $Error.Listen)
 
@@ -402,7 +402,7 @@ template acceptCommon(listener: SocketFD, conn: var Handle[SocketFD],
           else:
             {}
 
-  if conn.get == InvalidFD:
+  if conn.fd == InvalidFD:
     raise newOSError(WSAGetLastError(), $Error.Accept)
 
   var
@@ -417,7 +417,7 @@ template acceptCommon(listener: SocketFD, conn: var Handle[SocketFD],
 
   if AcceptEx(
     wincore.Socket(listener),
-    wincore.Socket(conn.get),
+    wincore.Socket(conn.fd),
     addr buf[0],
     0,
     AcceptExLocalLength,
@@ -481,7 +481,7 @@ template acceptCommon(listener: SocketFD, conn: var Handle[SocketFD],
   # socket.
   var listenerSock = listener
   if setsockopt(
-    wincore.Socket(conn.get),
+    wincore.Socket(conn.fd),
     SolSocket,
     SoUpdateAcceptContext,
     cast[cstring](addr listenerSock),
@@ -536,7 +536,7 @@ proc initWinsock() =
     SocketFD:
       WSASocketW(AF_INET, SOCK_STREAM, 0, nil, 0, toWSAFlags({}))
 
-  if dummy.get == InvalidFD:
+  if dummy.fd == InvalidFD:
     raise newOSError(WSAGetLastError(), "Could not initialize sys/sockets")
 
   # Obtain the function pointer for ConnectEx
@@ -544,7 +544,7 @@ proc initWinsock() =
     fnGuid = WSAID_CONNECTEX
     bytesReturned: DWORD
   if WSAIoctl(
-    wincore.Socket(dummy.get),
+    wincore.Socket(dummy.fd),
     SIO_GET_EXTENSION_FUNCTION_POINTER,
     addr fnGuid,
     DWORD sizeof(fnGuid),
