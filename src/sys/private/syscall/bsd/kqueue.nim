@@ -61,9 +61,9 @@ type
     ## Type used for filter specific flags
 
   FilterData* = (
-    when defined(freebsd) or defined(dragonfly):
+    when defined(dragonfly):
       int
-    elif defined(openbsd) or defined(netbsd) or defined(macosx):
+    elif defined(freebsd) or defined(openbsd) or defined(netbsd) or defined(macosx):
       int64
     else:
       {.error: "This module has not been ported to your operating system".}
@@ -78,34 +78,25 @@ type
   )
     ## Type used for user data
 
-when defined(macosx):
-  type
-    Kevent* {.pure.} = object
-      ## The kevent structure
-      ##
-      ## **Note**: This corresponds to `kevent64_s` structure.
-      ident*: Ident ## Event identifier, interpretation is determined by the filter
-      filter*: Filter ## Kernel filter used to process the event
-      flags*: Ev ## Actions to perform on the event
-      fflags*: FilterFlag ## Filter-specific flags
-      data*: FilterData ## Filter-specific data value
-      udata*: UserData ## Opaque user-defined value
-      ext*: array[2, uint64] ## Filter-specific extensions
-
-else:
-  type
-    Kevent* {.pure.} = object
-      ## The kevent structure
-      ##
-      ## **Note**: This struct is not ABI compatible with FreeBSD 12, but this is not
-      ## an issue for the `kevent()` wrapper below, as its configured to link to the
-      ## FreeBSD 11-compatible version.
-      ident*: Ident ## Event identifier, interpretation is determined by the filter
-      filter*: Filter ## Kernel filter used to process the event
-      flags*: Ev ## Actions to perform on the event
-      fflags*: FilterFlag ## Filter-specific flags
-      data*: FilterData ## Filter-specific data value
-      udata*: UserData ## Opaque user-defined value
+  Kevent* {.pure.} = object
+    ## The kevent structure
+    ##
+    ## **Platform-specific details**
+    ##
+    ## * On macOS, this structure corresponds to `kevent64_s`.
+    ##
+    ## * On FreeBSD, this structure corresponds to `kevent` on FreeBSD 12 and
+    ##   newer and is not compatible with FreeBSD 11 and older.
+    ident*: Ident ## Event identifier, interpretation is determined by the filter
+    filter*: Filter ## Kernel filter used to process the event
+    flags*: Ev ## Actions to perform on the event
+    fflags*: FilterFlag ## Filter-specific flags
+    data*: FilterData ## Filter-specific data value
+    udata*: UserData ## Opaque user-defined value
+    when defined(freebsd):
+      ext*: array[4, uint64] ## FreeBSD-specific extension data
+    elif defined(macosx):
+      ext*: array[2, uint64] ## macOS-specific extension data
 
 type
   FD* = distinct handles.FD
@@ -241,9 +232,3 @@ proc kevent*(kq: FD, eventList: var openArray[Kevent],
              timeout: Timespec): cint {.inline.} =
   kevent(kq, nil, 0, cast[ptr UncheckedArray[Kevent]](addr eventList[0]),
          ListSize(eventList.len), unsafeAddr timeout)
-
-when defined(freebsd):
-  import os
-
-  # Linker script to link kevent to the freebsd 11 version
-  {.passL: currentSourcePath().parentDir() / "kqueue_fbsd.ld".}
