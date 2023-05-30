@@ -149,32 +149,6 @@ template asyncWriteImpl() {.dirty.} =
   result = bytesWritten
 
 type
-  IP4Impl {.borrow: `.`.} = distinct InAddr
-  IP6Impl {.borrow: `.`.} = distinct In6Addr
-
-template ip4Word() {.dirty.} =
-  result = cast[uint32](ip.S_addr)
-
-template ip4SetWord() {.dirty.} =
-  ip.S_addr = cast[int32](w)
-
-type IP4EndpointImpl {.requiresInit, borrow: `.`.} = distinct Sockaddr_in
-
-template ip4InitEndpoint() {.dirty.} =
-  result = IP4EndpointImpl:
-    sockaddr_in(
-      sin_family: AF_INET,
-      sin_addr: InAddr(ip),
-      sin_port: toBE(port.uint16)
-    )
-
-template ip4EndpointAddr() {.dirty.} =
-  result = IP4 e.sin_addr
-
-template ip4EndpointPort() {.dirty.} =
-  result = Port fromBE(e.sin_port)
-
-type
   ResolverResultImpl* = object
     info: ptr AddrInfoW
 
@@ -389,7 +363,7 @@ const
   AcceptExBufferLength = AcceptExLocalLength + AcceptExRemoteLength
 
 template acceptCommon(listener: SocketFD, conn: var Handle[SocketFD],
-                      remote: var IP4EndpointImpl, overlapped: static bool) =
+                      remote: var IP4Endpoint, overlapped: static bool) =
   # Common parts for dealing with AcceptEx, `overlapped` dictates whether the
   # operation should be done in an overlapped manner and yields an overlapped
   # socket.
@@ -475,7 +449,7 @@ template acceptCommon(listener: SocketFD, conn: var Handle[SocketFD],
     "The address is not IPv4. This is a nim-sys bug."
 
   # Copy the remote address
-  remote = cast[ptr IP4EndpointImpl](remoteAddr)[]
+  remote = cast[ptr IP4Endpoint](remoteAddr)[]
 
   # Update the connection attributes so that other functions can be used on the
   # socket.
