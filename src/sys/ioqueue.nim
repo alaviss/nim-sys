@@ -46,7 +46,7 @@ type
     id*: int ## The unique ID of the resource, typically the resource handle,
              ## but is dependant on the target operating system.
 
-func newPrematureCloseDefect*(id: int): ref PrematureCloseDefect =
+proc newPrematureCloseDefect*(id: int): ref PrematureCloseDefect =
   ## Creates a `PrematureCloseDefect`
   result = newException(PrematureCloseDefect):
     "Resource id " & $id & " was invalidated before its unregistered"
@@ -168,7 +168,7 @@ proc wait*(c; fd: AnyFD, event: ReadyEvent): Continuation {.cpsMagic.} =
 
 proc wait*(c; fd: Handle[AnyFD], event: ReadyEvent): Continuation {.cpsMagic.} =
   ## An overload of `wait` for `Handle`.
-  ioqueue.wait(c, fd.get, event)
+  ioqueue.wait(c, fd.fd, event)
 
 when not declared(unregisterImpl):
   template unregisterImpl() {.dirty.} =
