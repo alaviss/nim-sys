@@ -34,4 +34,29 @@ template ip4EndpointAddr() {.dirty.} =
 template ip4EndpointPort() {.dirty.} =
   result = Port fromBE(e.sin_port)
 
+template octets(ip: IP6Impl): untyped =
+  ip.Byte
 
+type IP6EndpointImpl {.requiresInit, borrow: `.`.} = distinct sockaddr_in6
+
+template ip6InitEndpoint() {.dirty.} =
+  result = IP6EndpointImpl:
+    Sockaddr_in6(
+      sin6_family: AF_INET6,
+      sin6_addr: In6Addr(ip),
+      sin6_port: toBE(port.uint16),
+      sin6_flowinfo: int32(flowId)
+    )
+  result.union1.sin6_scope_id = int32(scopeId)
+
+template ip6EndpointAddr() {.dirty.} =
+  result = IP6 e.sin6_addr
+
+template ip6EndpointPort() {.dirty.} =
+  result = Port fromBE(e.sin6_port)
+
+template ip6EndpointFlowId() {.dirty.} =
+  result = FlowId e.sin6_flowinfo
+
+template ip6EndpointScopeId() {.dirty.} =
+  result = ScopeId e.union1.sin6_scope_id

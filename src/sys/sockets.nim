@@ -168,7 +168,7 @@ template derive(T, Base: typedesc): untyped =
 
 type
   Protocol* {.pure.} = enum
-    TCP
+    TCP ## Generic TCP socket
 
   Conn*[Protocol: static Protocol] = distinct Socket
     ## A connection with `Protocol`.
@@ -351,11 +351,13 @@ proc `=copy`*(dst: var ResolverResultImpl, src: ResolverResultImpl) {.error.}
   ## Copying a `ResolverResult` is prohibited at the moment. This restriction
   ## might be lifted in the future.
 
-proc resolveIP4*(host: string, port: Port = PortNone): ResolverResult
-                {.raises: [OSError, ResolverError].} =
+proc resolveIP*(host: string, port: Port = PortNone, kind = none(IPEndpointKind)): ResolverResult
+               {.raises: [OSError, ResolverError].} =
   ## Resolve the endpoints of `host` for port `port`.
   ##
   ## `port` will be carried over to the result verbatim.
+  ##
+  ## `kind` can be specified to limit the result to the specified endpoint address family.
   ##
   ## On failure, either `OSError` or `ResolverError` will be raised, depending
   ## on whether the error was caused by the operating system or the resolver.
@@ -367,17 +369,16 @@ proc resolveIP4*(host: string, port: Port = PortNone): ResolverResult
   ## - On Windows, the error code in `ResolverError` is one of the errors in this
   ##   `list <https://docs.microsoft.com/en-us/windows/win32/api/ws2tcpip/nf-ws2tcpip-getaddrinfow#return-value>`_.
   ##   Other errors are reported as `OSError`.
-  ip4Resolve()
+  ipResolve()
 
-# In the future this should be either generic or use `Endpoint`.
-iterator items*(r: ResolverResult): IP4Endpoint =
+iterator items*(r: ResolverResult): IPEndpoint =
   ## Yields endpoints from the resolving result
   resolvedItems()
 
-func closureItems(r: ResolverResult): iterator (): IP4Endpoint =
+func closureItems(r: ResolverResult): iterator (): IPEndpoint =
   ## Produce a closure iterator for `r.items`. This is necessary for use in CPS.
   result =
-    iterator(): IP4Endpoint =
+    iterator(): IPEndpoint =
       for ep in r.items:
         yield ep
 
@@ -394,6 +395,18 @@ proc connectTcp*(endpoint: IP4Endpoint): Conn[TCP]
                 {.raises: [OSError].} =
   ## Create a TCP connection to `endpoint`.
   tcpConnect()
+
+proc connectTcp*(endpoint: IP6Endpoint): Conn[TCP]
+                {.raises: [OSError].} =
+  ## Create a TCP connection to `endpoint`.
+  tcpConnect()
+
+proc connectTcp*(endpoint: IPEndpoint): Conn[TCP]
+                {.raises: [OSError].} =
+  ## Create a TCP connection to `endpoint`.
+  case endpoint.kind
+  of V4: connectTcp(endpoint.v4)
+  of V6: connectTcp(endpoint.v6)
 
 proc connectTcp*(endpoints: ResolverResult): Conn[TCP]
                 {.raises: [OSError, IncompatibleEndpointError].} =
@@ -431,12 +444,17 @@ proc connectTcp*(host: IP4, port: Port): Conn[TCP]
   ## Create a TCP connection to `host` and `port`.
   connectTcp initEndpoint(host, port)
 
+proc connectTcp*(host: IP6, port: Port): Conn[TCP]
+                {.inline, raises: [OSError].} =
+  ## Create a TCP connection to `host` and `port`.
+  connectTcp initEndpoint(host, port)
+
 proc connectTcp*(host: string, port: Port): Conn[TCP]
                 {.inline, raises: [OSError, ResolverError, IncompatibleEndpointError].} =
   ## Create a TCP connection to `host` and `port`.
   ##
   ## `host` will be resolved before connection.
-  connectTcp resolveIP4(host, port)
+  connectTcp resolveIP(host, port)
 
 proc connectTcpAsync*(endpoint: IP4Endpoint): AsyncConn[TCP]
                      {.asyncio.} =
@@ -444,6 +462,28 @@ proc connectTcpAsync*(endpoint: IP4Endpoint): AsyncConn[TCP]
   ##
   ## `OSError` is raised if the connection fails.
   tcpAsyncConnect()
+
+proc connectTcpAsync*(endpoint: IP6Endpoint): AsyncConn[TCP]
+                     {.asyncio.} =
+  ## Create an asynchronous TCP connection to `endpoint`.
+  ##
+  ## `OSError` is raised if the connection fails.
+  tcpAsyncConnect()
+
+proc connectTcpAsync*(endpoint: IPEndpoint): AsyncConn[TCP]
+                     {.asyncio.} =
+  ## Create an asynchronous TCP connection to `endpoint`.
+  ##
+  ## `OSError` is raised if the connection fails.
+  case endpoint.kind
+  of V4:
+    # XXX: https://github.com/nim-works/cps/issues/301
+    let v4 = endpoint.v4
+    connectTcpAsync(v4)
+  of V6:
+    # XXX: https://github.com/nim-works/cps/issues/301
+    let v6 = endpoint.v6
+    connectTcpAsync(v6)
 
 proc connectTcpAsync*(endpoints: ResolverResult): AsyncConn[TCP]
                      {.asyncio.} =
@@ -463,7 +503,7 @@ proc connectTcpAsync*(endpoints: ResolverResult): AsyncConn[TCP]
     attempted = false
     lastError: ref OSError
   {.warning: "Workaround for nim-works/cps#185".}
-  let next: iterator (): IP4Endpoint = closureItems(endpoints)
+  let next: iterator (): IPEndpoint = closureItems(endpoints)
   while true:
     attempted = true
     let ep = next()
@@ -490,13 +530,18 @@ proc connectTcpAsync*(host: IP4, port: Port): AsyncConn[TCP]
   ## Create a TCP connection to `host` and `port`.
   connectTcpAsync initEndpoint(host, port)
 
+proc connectTcpAsync*(host: IP6, port: Port): Conn[TCP]
+                     {.inline, raises: [OSError].} =
+  ## Create a TCP connection to `host` and `port`.
+  connectTcp initEndpoint(host, port)
+
 proc connectTcpAsync*(host: string, port: Port): AsyncConn[TCP]
                      {.asyncio.} =
   ## Create a TCP connection to `host` and `port`.
   ##
   ## `host` will be resolved **synchronously** before connection.
   # A move have to be done or the compiler might think that this is a copy.
-  var resolverResult = resolveIP4(host, port)
+  var resolverResult = resolveIP(host, port)
   connectTcpAsync move(resolverResult)
 
 type
@@ -526,6 +571,44 @@ proc listenTcp*(endpoint: IP4Endpoint, backlog = none(Natural)): Listener[TCP]
   ##
   ## If `backlog` is `0`, the OS will select a reasonable minimum.
   tcpListen()
+
+proc listenTcp*(endpoint: IP6Endpoint, backlog = none(Natural)): Listener[TCP]
+               {.raises: [OSError].} =
+  ## Listen at `endpoint` for TCP connections.
+  ##
+  ## If the port of the endpoint is `PortNone`, an ephemeral port will be
+  ## reserved automatically by the operating system. `localEndpoint` can be
+  ## used to retrieve the port number.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
+  tcpListen()
+
+proc listenTcp*(endpoint: IPEndpoint, backlog = none(Natural)): Listener[TCP]
+               {.raises: [OSError].} =
+  ## Listen at `endpoint` for TCP connections.
+  ##
+  ## If the port of the endpoint is `PortNone`, an ephemeral port will be
+  ## reserved automatically by the operating system. `localEndpoint` can be
+  ## used to retrieve the port number.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
+  case endpoint.kind
+  of V4: listenTcp(endpoint.v4)
+  of V6: listenTcp(endpoint.v6)
 
 proc listenTcp*(endpoints: ResolverResult, backlog = none(Natural)): Listener[TCP]
                {.raises: [OSError, IncompatibleEndpointError].} =
@@ -589,7 +672,26 @@ proc listenTcp*(host: IP4, port: Port, backlog = none(Natural)): Listener[TCP]
   ## If `backlog` is `0`, the OS will select a reasonable minimum.
   listenTcp(initEndpoint(host, port), backlog)
 
-proc listenTcp*(host: string, port: Port, backlog = none(Natural)): Listener[TCP]
+proc listenTcp*(host: IP6, port: Port, backlog = none(Natural)): Listener[TCP]
+               {.inline, raises: [OSError].} =
+  ## Listen at `host` and `port` for TCP connections.
+  ##
+  ## If the port of the endpoint is `PortNone`, an ephemeral port will be
+  ## reserved automatically by the operating system. `localEndpoint` can be
+  ## used to fetch this data.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
+  listenTcp(initEndpoint(host, port), backlog)
+
+proc listenTcp*(host: string, port: Port, kind = none(IPEndpointKind),
+                backlog = none(Natural)): Listener[TCP]
                {.inline, raises: [OSError, IncompatibleEndpointError, ResolverError].} =
   ## Listen at `host` and `port` for TCP connections.
   ##
@@ -605,7 +707,7 @@ proc listenTcp*(host: string, port: Port, backlog = none(Natural)): Listener[TCP
   ## If `backlog` is `None`, the maximum queue length will be selected.
   ##
   ## If `backlog` is `0`, the OS will select a reasonable minimum.
-  listenTcp(resolveIP4(host, port), backlog)
+  listenTcp(resolveIP(host, port, kind), backlog)
 
 {.warning: "Compiler bug workaround, see https://github.com/nim-lang/Nim/issues/19118".}
 proc listenTcpAsync*(endpoint: IP4Endpoint, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
@@ -625,6 +727,52 @@ proc listenTcpAsync*(endpoint: IP4Endpoint, backlog: Option[Natural] = none(Natu
   ##
   ## If `backlog` is `0`, the OS will select a reasonable minimum.
   tcpAsyncListen()
+
+{.warning: "Compiler bug workaround, see https://github.com/nim-lang/Nim/issues/19118".}
+proc listenTcpAsync*(endpoint: IP6Endpoint, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
+                    {.asyncio.} =
+  ## Listen at `endpoint` for TCP connections asynchronously.
+  ##
+  ## If the port of the endpoint is `PortNone`, an ephemeral port will be
+  ## reserved automatically by the operating system. `localEndpoint` can be
+  ## used to retrieve the port number.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
+  tcpAsyncListen()
+
+{.warning: "Compiler bug workaround, see https://github.com/nim-lang/Nim/issues/19118".}
+proc listenTcpAsync*(endpoint: IPEndpoint, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
+                    {.asyncio.} =
+  ## Listen at `endpoint` for TCP connections asynchronously.
+  ##
+  ## If the port of the endpoint is `PortNone`, an ephemeral port will be
+  ## reserved automatically by the operating system. `localEndpoint` can be
+  ## used to retrieve the port number.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
+  case endpoint.kind
+  of V4:
+    # XXX: https://github.com/nim-works/cps/issues/301
+    let v4 = endpoint.v4
+    listenTcpAsync(v4)
+  of V6:
+    # XXX: https://github.com/nim-works/cps/issues/301
+    let v6 = endpoint.v6
+    listenTcpAsync(v6)
 
 proc listenTcpAsync*(endpoints: ResolverResult, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
                     {.asyncio.} =
@@ -648,7 +796,7 @@ proc listenTcpAsync*(endpoints: ResolverResult, backlog: Option[Natural] = none(
     attempted = false
     lastError: ref OSError
   {.warning: "Workaround for nim-works/cps#185".}
-  let next: iterator (): IP4Endpoint = closureItems(endpoints)
+  let next: iterator (): IPEndpoint = closureItems(endpoints)
   while true:
     attempted = true
     let ep = next()
@@ -688,7 +836,27 @@ proc listenTcpAsync*(host: IP4, port: Port, backlog: Option[Natural] = none(Natu
   ## If `backlog` is `0`, the OS will select a reasonable minimum.
   listenTcpAsync(initEndpoint(host, port), backlog)
 
-proc listenTcpAsync*(host: string, port: Port, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
+proc listenTcpAsync*(host: IP6, port: Port, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
+                    {.asyncio.} =
+  ## Listen at `host` and `port` for TCP connections.
+  ##
+  ## If the port of the endpoint is `PortNone`, an ephemeral port will be
+  ## reserved automatically by the operating system. `localEndpoint` can be
+  ## used to retrieve the port number.
+  ##
+  ## The `backlog` parameter defines the maximum amount of pending connections.
+  ## If a connection request arrives when the queue is full, the client might
+  ## receive a "Connection refused" error or the connection might be silently
+  ## dropped. This value is treated by most operating systems as a hint.
+  ##
+  ## If `backlog` is `None`, the maximum queue length will be selected.
+  ##
+  ## If `backlog` is `0`, the OS will select a reasonable minimum.
+  listenTcpAsync(initEndpoint(host, port), backlog)
+
+proc listenTcpAsync*(host: string, port: Port,
+                     kind: Option[IPEndpointKind] = none(IPEndpointKind),
+                     backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
                     {.asyncio.} =
   ## Listen at `host` and `port` for TCP connections.
   ##
@@ -706,20 +874,20 @@ proc listenTcpAsync*(host: string, port: Port, backlog: Option[Natural] = none(N
   ## If `backlog` is `0`, the OS will select a reasonable minimum.
   # A move have to be performed due to the compiler thinking that this is a
   # "copy".
-  listenTcpAsync(resolveIP4(host, port), backlog)
+  listenTcpAsync(resolveIP(host, port, kind), backlog)
 
-proc accept*(l: Listener[TCP]): tuple[conn: Conn[TCP], remote: IP4Endpoint] {.raises: [OSError].} =
+proc accept*(l: Listener[TCP]): tuple[conn: Conn[TCP], remote: IPEndpoint] {.raises: [OSError].} =
   ## Get the first connection from the queue of pending connections of `l`.
   ##
   ## Returns the connection and its endpoint.
   tcpAccept()
 
-proc accept*(l: AsyncListener[TCP]): tuple[conn: AsyncConn[TCP], remote: IP4Endpoint] {.asyncio.} =
+proc accept*(l: AsyncListener[TCP]): tuple[conn: AsyncConn[TCP], remote: IPEndpoint] {.asyncio.} =
   ## Get the first connection from the queue of pending connections of `l`.
   ##
   ## Returns the connection and its endpoint.
   tcpAsyncAccept()
 
-proc localEndpoint*(l: AsyncListener[TCP] | Listener[TCP]): IP4Endpoint {.raises: [OSError].} =
+proc localEndpoint*(l: AsyncListener[TCP] | Listener[TCP]): IPEndpoint {.raises: [OSError].} =
   ## Obtain the local endpoint of `l`.
   tcpLocalEndpoint()
