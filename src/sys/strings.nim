@@ -31,6 +31,14 @@ converter toString*(w: Without): lent string =
   ## drop-in compatibility with non-mutating operations on a string.
   w.string
 
+template `[]`*[C](w: Without[C], slice: Slice[int]): Without[C] =
+  ## Returns a copy of `w`'s `slice`.
+  Without[C] w.string[slice]
+
+template `[]`*[C](w: Without[C], slice: HSlice[int, BackwardsIndex]): Without[C] =
+  ## Returns a copy of `w`'s `slice`.
+  Without[C] w.string[slice]
+
 func `[]=`*[C](w: var Without[C], i: Natural, c: char)
               {.inline, raises: [ValueError].} =
   ## Set the byte at position `i` of the string `w` to `c`.
