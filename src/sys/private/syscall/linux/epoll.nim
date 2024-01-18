@@ -87,7 +87,8 @@ proc create*(flags: cint): FD {.cdecl, importc: "epoll_create1".}
 proc ctl*(epfd: FD, op: CtlOp, fd: handles.FD, event: ptr Event): cint
          {.cdecl, importc: "epoll_ctl".}
 proc ctl*(epfd: FD, op: CtlOp, fd: handles.FD, event: var Event): cint
-         {.cdecl, importc: "epoll_ctl".}
+         {.inline.} =
+  ctl(epfd, op, fd, addr event)
 
 proc wait*(epfd: FD, events: ptr UncheckedArray[Event], maxevents: cint,
            timeout: cint): cint {.cdecl, importc: "epoll_wait".}
