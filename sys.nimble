@@ -10,7 +10,7 @@ srcDir        = "src"
 # Dependencies
 
 requires "nim >= 1.5.1"
-requires "https://github.com/disruptek/balls >= 3.9.0 & < 4.0.0"
+requires "https://github.com/disruptek/balls >= 5.0.0 & < 6.0.0"
 when (NimMajor, NimMinor, NimPatch) < (1, 9, 0):
   requires "https://github.com/nim-works/cps >= 0.8.0 & < 0.9.0"
 else:
