@@ -164,3 +164,12 @@ jobs:
       - name: Deploy page
         id: deployment
         uses: actions/deploy-pages@v4.0.3
+
+  passed:
+    needs: build
+    if: failure() || cancelled()
+    name: All tests passed
+
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 1
