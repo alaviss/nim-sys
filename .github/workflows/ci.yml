@@ -31,7 +31,9 @@ jobs:
             winlib_arch: x86_64
           - target: linux
             arch: amd64
-            branch: devel
+            compiler:
+              name: nim
+              version: devel
             builddocs: true
         exclude:
           - target: macos
