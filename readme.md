@@ -1,7 +1,7 @@
 # An abstraction layer for common operating system services
 
 [![CI status](https://github.com/alaviss/nim-sys/workflows/CI/badge.svg)](https://github.com/alaviss/nim-sys/actions?query=workflow%3ACI)
-![Minimum supported Nim version](https://img.shields.io/badge/nim-1.6.0%2B-informational?style=flat&logo=nim)
+![Minimum supported Nim version](https://img.shields.io/badge/nim-2.0.0%2B-informational?style=flat&logo=nim)
 [![License](https://img.shields.io/github/license/alaviss/nim-sys?style=flat)](#license)
 
 This package is an experiment in rewriting various parts of stdlib's `os` module.

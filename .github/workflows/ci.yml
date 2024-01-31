@@ -12,8 +12,6 @@ jobs:
             version: devel
           - name: nim
             version: version-2-0
-          - name: nim
-            version: version-1-6
           - name: nimskull
             version: "*"
         target: [linux, macos, windows]
