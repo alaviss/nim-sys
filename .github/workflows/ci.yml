@@ -34,7 +34,11 @@ jobs:
             compiler:
               name: nim
               version: devel
-            builddocs: true
+            uploaddocs: true
+          # XXX: nimskull hangs forever trying to build docs
+          - compiler:
+              name: nimskull
+            nodocs: true
         exclude:
           - target: macos
             arch: i386
@@ -139,6 +143,7 @@ jobs:
         run: balls
 
       - name: Build docs
+        if: "!matrix.nodocs"
         shell: bash
         run: |
           branch=${{ github.ref }}
@@ -154,7 +159,7 @@ jobs:
           cp htmldocs/{the,}index.html || true
 
       - name: Upload GitHub Pages artifact
-        if: matrix.builddocs
+        if: matrix.uploaddocs
         uses: actions/upload-pages-artifact@v3.0.0
         with:
           path: nim-sys/htmldocs
