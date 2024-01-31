@@ -77,13 +77,10 @@ func toWithout*[A](w: sink Without[A], C: static set[char]): Without[C]
 
 func filter*(s: string, C: static set[char]): Without[C] {.raises: [].} =
   ## Remove characters in set `C` from `s` and create a `Without[C]`.
-  var i = 0
-  result = Without[C](s)
-  while i < result.len:
-    if result[i] in C:
-      result.string.delete(i, i)
-    else:
-      inc i
+  result = Without[C]: newStringOfCap(s.len)
+  for chr in s.items:
+    if chr notin C:
+      result.string.add(chr)
 
 func filter*[A](w: Without[A], C: static set[char]): Without[C]
                {.raises: [].} =
