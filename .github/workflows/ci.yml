@@ -16,14 +16,20 @@ jobs:
             builder: macos-11
           - target: windows
             builder: windows-2019
+          - target: windows
+            arch: i386
+            winlib_arch: i686
+          - target: windows
+            arch: amd64
+            winlib_arch: x86_64
           - target: linux
             arch: amd64
             branch: devel
-            pushdocs: true
+            builddocs: true
         exclude:
           - target: macos
             arch: i386
-    name: "${{ matrix.target }} on ${{ matrix.arch }} (Nim ${{ matrix.branch }})"
+    name: ${{ matrix.target }} on ${{ matrix.arch }} (Nim ${{ matrix.branch }})
     runs-on: ${{ matrix.builder }}
 
     defaults:
@@ -33,7 +39,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.5.2
+        uses: actions/checkout@v4.1.1
         with:
           path: nim-sys
           submodules: "recursive"
@@ -41,24 +47,26 @@ jobs:
       - name: Configure Nim for 32 bit GCC (Linux-only)
         if: matrix.arch == 'i386' && runner.os == 'Linux'
         run: |
-          sudo dpkg --add-architecture i386
           sudo apt-fast update -qq
           sudo DEBIAN_FRONTEND='noninteractive' apt-fast install \
-            --no-install-recommends -yq gcc-multilib g++-multilib
+            --no-install-recommends -yq \
+            gcc-10-i686-linux-gnu \
+            g++-10-i686-linux-gnu \
+            libc6-dev-i386-cross \
+            libstdc++-10-dev-i386-cross
           mkdir -p ~/.config/nim
           cat << EOF > ~/.config/nim/nim.cfg
-          gcc.options.always %= "\${gcc.options.always} -m32"
-          gcc.cpp.options.always %= "\${gcc.cpp.options.always} -m32"
-          gcc.options.linker %= "\${gcc.options.linker} -m32"
-          gcc.cpp.options.linker %= "\${gcc.cpp.options.linker} -m32"
+          gcc.exe = "i686-linux-gnu-gcc-10"
+          gcc.cpp.exe = "i686-linux-gnu-g++-10"
+          gcc.linkerexe = "i686-linux-gnu-gcc-10"
+          gcc.cpp.linkerexe = "i686-linux-gnu-g++-10"
           EOF
 
-      - name: Install 32bit MinGW (Windows-only)
-        if: matrix.arch == 'i386' && runner.os == 'Windows'
-        uses: egor-tensin/setup-mingw@v2
+      - name: Setup GCC (Windows-only)
+        if: runner.os == 'Windows'
+        uses: bwoodsend/setup-winlibs-action@v1.14
         with:
-          platform: x86
-          static: 0
+          architecture: ${{ matrix.winlib_arch }}
 
       - name: Setup Nim
         uses: alaviss/setup-nim@0.1.1
@@ -88,12 +96,27 @@ jobs:
           # Ignore failures for older Nim
           cp htmldocs/{the,}index.html || true
 
-      - name: Publish docs
-        if: >
-          matrix.pushdocs && github.event_name == 'push' &&
-          github.ref == 'refs/heads/master'
-        uses: crazy-max/ghaction-github-pages@v3.0.0
+      - name: Upload GitHub Pages artifact
+        if: matrix.builddocs
+        uses: actions/upload-pages-artifact@v3.0.0
         with:
-          build_dir: nim-sys/htmldocs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: nim-sys/htmldocs
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/master'
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    name: Deploy docs to GitHub Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy page
+        id: deployment
+        uses: actions/deploy-pages@v4.0.3
