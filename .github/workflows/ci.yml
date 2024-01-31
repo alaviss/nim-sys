@@ -36,6 +36,17 @@ jobs:
         exclude:
           - target: macos
             arch: i386
+
+          # TODO: nimskull needs fixes for this to work
+          - target: linux
+            arch: i386
+            compiler:
+              name: nimskull
+
+          # TODO: a handful of problems with SSL must be solved before this
+          - target: windows
+            compiler:
+              name: nimskull
     name:
       ${{ matrix.target }} on ${{ matrix.arch }} (${{ matrix.compiler.name }}
       ${{ matrix.compiler.version }})
