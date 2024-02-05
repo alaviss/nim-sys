@@ -97,7 +97,7 @@ jobs:
 
       - name: Setup GCC (Windows-only)
         if: runner.os == 'Windows'
-        uses: bwoodsend/setup-winlibs-action@v1.14
+        uses: bwoodsend/setup-winlibs-action@v1.15
         with:
           architecture: ${{ matrix.winlib_arch }}
 
