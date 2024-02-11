@@ -405,9 +405,9 @@ template tcpLocalEndpoint() {.dirty.} =
     "The length of the endpoint structure is bigger than expected size. This is a nim-sys bug."
 
   case saddr.ss_family
-  of AF_INET.TSa_Family:
+  of TSa_Family(AF_INET):
     result = IPEndpoint(kind: V4, v4: cast[IP4Endpoint](saddr))
-  of AF_INET6.TSa_Family:
+  of TSa_Family(AF_INET6):
     result = IPEndpoint(kind: V6, v6: cast[IP6Endpoint](saddr))
   else:
     doAssert false, "Unexpected remote address family: " & $saddr.ss_family
