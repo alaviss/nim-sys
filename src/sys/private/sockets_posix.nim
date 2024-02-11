@@ -135,10 +135,9 @@ template resolvedItems() {.dirty.} =
   var info = r.info
   while info != nil:
     if info.ai_addr != nil:
-      case info.ai_addr.sa_family
-      of AF_INET.TSa_Family:
+      if info.ai_addr.sa_family == AF_INET.TSa_Family:
         yield IPEndpoint(kind: V4, v4: cast[ptr IP4Endpoint](info.ai_addr)[])
-      of AF_INET6.TSa_Family:
+      elif info.ai_addr.sa_family == AF_INET6.TSa_Family:
         yield IPEndpoint(kind: V6, v6: cast[ptr IP6Endpoint](info.ai_addr)[])
       else:
         discard "Should not be possible, but harmless even if it is"
@@ -164,7 +163,7 @@ proc handleAsyncConnectResult(fd: SocketFD) {.raises: [OSError].} =
     raise newOSError(error, $Error.Connect)
 
 template tcpConnect() {.dirty.} =
-  const addressFamily =
+  let addressFamily =
     when endpoint is IP4Endpoint:
       AF_INET
     elif endpoint is IP6Endpoint:
@@ -192,7 +191,7 @@ template tcpConnect() {.dirty.} =
   result = Conn[TCP] newSocket(sock)
 
 template tcpAsyncConnect() {.dirty.} =
-  const addressFamily =
+  let addressFamily =
     when endpoint is IP4Endpoint:
       AF_INET
     elif endpoint is IP6Endpoint:
@@ -231,7 +230,7 @@ func maxBacklog(): Natural =
       SOMAXCONN
 
 template tcpListen() {.dirty.} =
-  const addressFamily =
+  let addressFamily =
     when endpoint is IP4Endpoint:
       AF_INET
     elif endpoint is IP6Endpoint:
@@ -254,7 +253,7 @@ template tcpListen() {.dirty.} =
   result = Listener[TCP] newSocket(sock)
 
 template tcpAsyncListen() {.dirty.} =
-  const addressFamily =
+  let addressFamily =
     when endpoint is IP4Endpoint:
       AF_INET
     elif endpoint is IP6Endpoint:
@@ -356,10 +355,9 @@ template tcpAccept() {.dirty.} =
     raise newOSError(errno, $Error.Accept)
 
   result.conn = Conn[TCP] newSocket(conn)
-  case saddr.ss_family
-  of AF_INET.TSa_Family:
+  if saddr.ss_family == AF_INET.TSa_Family:
     result.remote = IPEndpoint(kind: V4, v4: cast[IP4Endpoint](saddr))
-  of AF_INET6.TSa_Family:
+  elif saddr.ss_family == AF_INET6.TSa_Family:
     result.remote = IPEndpoint(kind: V6, v6: cast[IP6Endpoint](saddr))
   else:
     doAssert false, "Unexpected remote address family: " & $saddr.ss_family
@@ -380,10 +378,9 @@ template tcpAsyncAccept() {.dirty.} =
     else:
       # We got a connection
       result.conn = AsyncConn[TCP] newAsyncSocket(move conn)
-      case saddr.ss_family
-      of AF_INET.TSa_Family:
+      if saddr.ss_family == AF_INET.TSa_Family:
         result.remote = IPEndpoint(kind: V4, v4: cast[IP4Endpoint](saddr))
-      of AF_INET6.TSa_Family:
+      elif saddr.ss_family == AF_INET6.TSa_Family:
         result.remote = IPEndpoint(kind: V6, v6: cast[IP6Endpoint](saddr))
       else:
         doAssert false, "Unexpected remote address family: " & $saddr.ss_family
@@ -404,10 +401,9 @@ template tcpLocalEndpoint() {.dirty.} =
   assert endpointLen <= SockLen(sizeof saddr):
     "The length of the endpoint structure is bigger than expected size. This is a nim-sys bug."
 
-  case saddr.ss_family
-  of TSa_Family(AF_INET):
+  if saddr.ss_family == TSa_Family(AF_INET):
     result = IPEndpoint(kind: V4, v4: cast[IP4Endpoint](saddr))
-  of TSa_Family(AF_INET6):
+  elif saddr.ss_family == TSa_Family(AF_INET6):
     result = IPEndpoint(kind: V6, v6: cast[IP6Endpoint](saddr))
   else:
     doAssert false, "Unexpected remote address family: " & $saddr.ss_family
