@@ -43,7 +43,7 @@ template ip6InitEndpoint() {.dirty.} =
   result = IP6EndpointImpl:
     Sockaddr_in6(
       sin6_family: AF_INET6.TSa_Family,
-      sin6_addr: cast[In6AddrOrig](ip),
+      sin6_addr: cast[In6Addr](ip),
       sin6_port: toBE(port.uint16),
       sin6_flowinfo: uint32(flowId),
       sin6_scope_id: uint32(scopeId)
