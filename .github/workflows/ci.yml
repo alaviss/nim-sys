@@ -181,7 +181,7 @@ jobs:
     steps:
       - name: Deploy page
         id: deployment
-        uses: actions/deploy-pages@v4.0.3
+        uses: actions/deploy-pages@v4.0.4
 
   passed:
     needs: build
