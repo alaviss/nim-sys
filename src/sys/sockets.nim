@@ -477,13 +477,9 @@ proc connectTcpAsync*(endpoint: IPEndpoint): AsyncConn[TCP]
   ## `OSError` is raised if the connection fails.
   case endpoint.kind
   of V4:
-    # XXX: https://github.com/nim-works/cps/issues/301
-    let v4 = endpoint.v4
-    connectTcpAsync(v4)
+    connectTcpAsync(endpoint.v4)
   of V6:
-    # XXX: https://github.com/nim-works/cps/issues/301
-    let v6 = endpoint.v6
-    connectTcpAsync(v6)
+    connectTcpAsync(endpoint.v6)
 
 proc connectTcpAsync*(endpoints: ResolverResult): AsyncConn[TCP]
                      {.asyncio.} =
@@ -766,13 +762,9 @@ proc listenTcpAsync*(endpoint: IPEndpoint, backlog: Option[Natural] = none(Natur
   ## If `backlog` is `0`, the OS will select a reasonable minimum.
   case endpoint.kind
   of V4:
-    # XXX: https://github.com/nim-works/cps/issues/301
-    let v4 = endpoint.v4
-    listenTcpAsync(v4)
+    listenTcpAsync(endpoint.v4)
   of V6:
-    # XXX: https://github.com/nim-works/cps/issues/301
-    let v6 = endpoint.v6
-    listenTcpAsync(v6)
+    listenTcpAsync(endpoint.v6)
 
 proc listenTcpAsync*(endpoints: ResolverResult, backlog: Option[Natural] = none(Natural)): AsyncListener[TCP]
                     {.asyncio.} =
