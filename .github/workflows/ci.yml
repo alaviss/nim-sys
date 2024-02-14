@@ -1,5 +1,9 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -23,7 +27,6 @@ jobs:
         uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           paths_ignore: '["**/readme.md"]'
-          concurrent_skipping: same_content_newer
 
   build:
     needs: context
