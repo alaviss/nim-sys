@@ -1,12 +1,36 @@
 name: CI
 on: [push, pull_request]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  context:
+    name: Obtain run context
+    runs-on: ubuntu-latest
+    outputs:
+      should-skip: ${{ steps.skip.outputs.should_skip }}
+      skip-reason: ${{ steps.skip.outputs.reason }}
+      skipped-by: ${{ steps.skip.outputs.skipped_by }}
+
+    permissions:
+      actions: read
+
+    steps:
+      - name: Skip duplicate actions
+        id: skip
+        uses: fkirc/skip-duplicate-actions@v5.3.1
+        with:
+          paths_ignore: '["**/readme.md"]'
+          concurrent_skipping: same_content_newer
+
   build:
+    needs: context
+    if: needs.context.outputs.should-skip != 'true' && !cancelled()
     strategy:
       fail-fast: false
       matrix:
-        branch: [devel]
         compiler:
           - name: nim
             version: devel
@@ -165,10 +189,18 @@ jobs:
           path: nim-sys/htmldocs
 
   deploy:
-    needs: build
-    if: github.ref == 'refs/heads/master'
+    needs:
+      - build
+      - context
+    if: |
+      github.ref == 'refs/heads/master' &&
+      success() ||
+      (!cancelled() &&
+       !failure() &&
+       needs.context.outputs.skip-reason == 'skip_after_successful_duplicate')
 
     permissions:
+      actions: read
       pages: write
       id-token: write
 
@@ -179,6 +211,23 @@ jobs:
     name: Deploy docs to GitHub Pages
     runs-on: ubuntu-latest
     steps:
+      - name: Download github-pages artifact
+        if:
+          needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
+        uses: actions/download-artifact@v4.1.2
+        with:
+          name: github-pages
+          path: page
+          run-id: ${{ fromJson(needs.context.outputs.skipped-by).id }}
+          github-token: ${{ github.token }}
+
+      - name: Upload pages artifact
+        if:
+          needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
+        uses: actions/upload-pages-artifact@v3.0.1
+        with:
+          path: page
+
       - name: Deploy page
         id: deployment
         uses: actions/deploy-pages@v4.0.4
