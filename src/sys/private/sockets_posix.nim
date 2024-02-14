@@ -106,7 +106,7 @@ template ip4Resolve() {.dirty.} =
 
   let hints = AddrInfo(
     ai_family: AF_INET,
-    ai_flags: AI_NUMERICSERV or AI_ADDRCONFIG
+    ai_flags: AI_NUMERICSERV
   )
 
   let err = getaddrinfo(

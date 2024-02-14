@@ -161,7 +161,6 @@ template ip4Resolve() {.dirty.} =
   result = new ResolverResultImpl
 
   let hints = AddrInfoW(
-    ai_flags: AI_ADDRCONFIG,
     ai_family: AF_INET
   )
 
