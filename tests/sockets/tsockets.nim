@@ -7,6 +7,21 @@ makeAccRead(AsyncConn[TCP])
 makeAccWrite(AsyncConn[TCP])
 makeDelimRead(AsyncConn[TCP])
 
+proc getEphemeralPort(kind: IPEndpointKind): Port =
+  let endpoint =
+    case kind
+    of V4: IPEndpoint(kind: V4, v4: initEndpoint(IP4Any, PortNone))
+    of V6: IPEndpoint(kind: V6, v6: initEndpoint(IP6Any, PortNone))
+
+  let listener = listenTcp(endpoint, some(1.Natural))
+  defer: close listener # to appease refc
+  let lendpoint = listener.localEndpoint
+
+  result =
+    case lendpoint.kind
+    of V4: lendpoint.v4.port
+    of V6: lendpoint.v6.port
+
 suite "TCP sockets":
   test "Listening on TCP port 0 will create a random port":
     let server = listenTcp(IP4Loopback, PortNone)
@@ -16,6 +31,34 @@ suite "TCP sockets":
       let asyncServer = listenTcpAsync(IP4Loopback, PortNone)
       check asyncServer.localEndpoint.v4.port != PortNone
       check asyncServer.localEndpoint.v4.port != server.localEndpoint.v4.port
+
+    checkAsync()
+    run()
+
+  test "Listening on an explicit TCP port":
+    let port = getEphemeralPort(V4)
+
+    let server = listenTcp(IP4Loopback, port)
+    check server.localEndpoint.v4.port == port
+    close server
+
+    proc checkAsync() {.asyncio.} =
+      let asyncServer = listenTcpAsync(IP4Loopback, port)
+      check asyncServer.localEndpoint.v4.port == port
+
+    checkAsync()
+    run()
+
+  test "Listening on an explicit TCP port with IPv6":
+    let port = getEphemeralPort(V6)
+
+    let server = listenTcp(IP6Loopback, port)
+    check server.localEndpoint.v6.port == port
+    close server
+
+    proc checkAsync() {.asyncio.} =
+      let asyncServer = listenTcpAsync(IP6Loopback, port)
+      check asyncServer.localEndpoint.v6.port == port
 
     checkAsync()
     run()
@@ -51,9 +94,121 @@ suite "TCP sockets":
       check asyncServer.localEndpoint.v4.port != PortNone
       check asyncServer.localEndpoint.v4.port != server.localEndpoint.v4.port
       # Connect then disconnect immediately
-      let
-        lEndpoint = asyncServer.localEndpoint.v4
-        port = lEndpoint.port
+      close connectTcpAsync("localhost", asyncServer.localEndpoint.v4.port)
+
+    checkAsync()
+    run()
+
+  test "Listening/connecting on/to localhost with set port":
+    var port = getEphemeralPort(V4)
+    # The main point of this test is to make sure that the name-based API works.
+    proc acceptWorker(s: ptr Listener[TCP]) {.thread.} =
+      {.gcsafe.}:
+        # Accept then close connection immediately
+        close s[].accept().conn
+
+    var server = listenTcp("localhost", port, kind = some(V4))
+    defer: close server
+    check server.localEndpoint.v4.port == port
+    var thr: Thread[ptr Listener[TCP]]
+    thr.createThread(acceptWorker, addr server)
+
+    # Connect then disconnect immediately
+    close connectTcp("localhost", port)
+
+    # Close the thread
+    joinThread thr
+
+    # Get a new port because macOS TIME_WAIT is too long
+    port = getEphemeralPort(V4)
+    proc acceptWorker(s: AsyncListener[TCP]) {.asyncio.} =
+      # Accept then close connection immediately
+      close s.accept().conn
+
+    proc checkAsync() {.asyncio.} =
+      let asyncServer = listenTcpAsync("localhost", port, kind = some(V4))
+      # Run until the worker dismisses to the background
+      discard trampoline:
+        whelp acceptWorker(asyncServer)
+
+      check asyncServer.localEndpoint.v4.port == port
+      # Connect then disconnect immediately
+      close connectTcpAsync("localhost", port)
+
+    checkAsync()
+    run()
+
+  test "Listening/connecting on/to localhost with IPv6":
+    # The main point of this test is to make sure that the name-based API works.
+    proc acceptWorker(s: ptr Listener[TCP]) {.thread.} =
+      {.gcsafe.}:
+        # Accept then close connection immediately
+        close s[].accept().conn
+
+    var server = listenTcp("localhost", PortNone, kind = some(V6))
+    check server.localEndpoint.v6.port != PortNone
+    var thr: Thread[ptr Listener[TCP]]
+    thr.createThread(acceptWorker, addr server)
+
+    # Connect then disconnect immediately
+    close connectTcp("localhost", server.localEndpoint.v6.port)
+
+    # Close the thread
+    joinThread thr
+
+    proc acceptWorker(s: AsyncListener[TCP]) {.asyncio.} =
+      # Accept then close connection immediately
+      close s.accept().conn
+
+    proc checkAsync() {.asyncio.} =
+      let asyncServer = listenTcpAsync("localhost", PortNone, kind = some(V6))
+      # Run until the worker dismisses to the background
+      discard trampoline:
+        whelp acceptWorker(asyncServer)
+
+      check asyncServer.localEndpoint.v6.port != PortNone
+      check asyncServer.localEndpoint.v6.port != server.localEndpoint.v6.port
+      # Connect then disconnect immediately
+      close connectTcpAsync("localhost", asyncServer.localEndpoint.v6.port)
+
+    checkAsync()
+    run()
+
+  test "Listening/connecting on/to localhost with set port on IPv6":
+    var port = getEphemeralPort(V6)
+
+    # The main point of this test is to make sure that the name-based API works.
+    proc acceptWorker(s: ptr Listener[TCP]) {.thread.} =
+      {.gcsafe.}:
+        # Accept then close connection immediately
+        close s[].accept().conn
+
+    var server = listenTcp("localhost", port, kind = some(V6))
+    defer: close server
+    check server.localEndpoint.v6.port == port
+    var thr: Thread[ptr Listener[TCP]]
+    thr.createThread(acceptWorker, addr server)
+
+    # Connect then disconnect immediately
+    close connectTcp("localhost", port)
+
+    # Close the thread
+    joinThread thr
+
+    # Get a new port because macOS TIME_WAIT is too long
+    port = getEphemeralPort(V6)
+    proc acceptWorker(s: AsyncListener[TCP]) {.asyncio.} =
+      # Accept then close connection immediately
+      close s.accept().conn
+
+    proc checkAsync() {.asyncio.} =
+      let asyncServer = listenTcpAsync("localhost", port, kind = some(V6))
+      # Run until the worker dismisses to the background
+      discard trampoline:
+        whelp acceptWorker(asyncServer)
+
+      check asyncServer.localEndpoint.v6.port == port
+      # Connect then disconnect immediately
       close connectTcpAsync("localhost", port)
 
     checkAsync()
