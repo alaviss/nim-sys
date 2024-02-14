@@ -76,7 +76,7 @@ func toEvents(ev: Ev): set[Event] =
   if ev.has EvPri:
     result.incl PriorityRead
 
-proc queue(eq: var EventQueueImpl, cont: Continuation, fd: AnyFD, event: ReadyEvent) =
+proc queue(eq: var EventQueueImpl, cont: Continuation, fd: FD, event: ReadyEvent) =
   var epEvent = epoll.Event(events: toEv({event}), data: Data(fd: fd.cint))
   # If adding `fd` to epoll fails
   if eq.epoll.fd.ctl(CtlAdd, fd, epEvent) == -1:
