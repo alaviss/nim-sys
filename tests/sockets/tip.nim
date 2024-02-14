@@ -14,8 +14,10 @@ suite "IP address testing":
     for ep in resolveIP("localhost").items:
       if ep.kind == V4 and ep.v4.ip == ip4(127, 0, 0, 1):
         foundV4 = true
+        check ep.v4.port == PortNone
       elif ep.kind == V6 and ep.v6.ip == ip6(0, 0, 0, 0, 0, 0, 0, 1):
         foundV6 = true
+        check ep.v6.port == PortNone
 
     check foundV4, "did not find 127.0.0.1 when resolving for localhost"
     check foundV6, "did not find ::1 when resolving for localhost"
@@ -25,6 +27,7 @@ suite "IP address testing":
     for ep in resolveIP("localhost", kind = some(V4)).items:
       if ep.kind == V4 and ep.v4.ip == ip4(127, 0, 0, 1):
         foundV4 = true
+        check ep.v4.port == PortNone
       elif ep.kind == V6:
         check false, "found IPv6 for localhost but configured to resolve only IPv4 addresses"
 
@@ -34,6 +37,29 @@ suite "IP address testing":
     for ep in resolveIP("localhost", kind = some(V6)).items:
       if ep.kind == V6 and ep.v6.ip == ip6(0, 0, 0, 0, 0, 0, 0, 1):
         foundV6 = true
+        check ep.v6.port == PortNone
+      elif ep.kind == V4:
+        check false, "found IPv4 for localhost but configured to resolve only IPv6 addresses"
+
+    check foundV6, "did not find ::1 when resolving for localhost"
+
+  test "Resolve for localhost with port":
+    const port = 8080.Port
+    var foundV4 = false
+    for ep in resolveIP("localhost", port, kind = some(V4)).items:
+      if ep.kind == V4 and ep.v4.ip == ip4(127, 0, 0, 1):
+        foundV4 = true
+        check ep.v4.port == port
+      elif ep.kind == V6:
+        check false, "found IPv6 for localhost but configured to resolve only IPv4 addresses"
+
+    check foundV4, "did not find 127.0.0.1 when resolving for localhost"
+
+    var foundV6 = false
+    for ep in resolveIP("localhost", port, kind = some(V6)).items:
+      if ep.kind == V6 and ep.v6.ip == ip6(0, 0, 0, 0, 0, 0, 0, 1):
+        foundV6 = true
+        check ep.v6.port == port
       elif ep.kind == V4:
         check false, "found IPv4 for localhost but configured to resolve only IPv6 addresses"
 

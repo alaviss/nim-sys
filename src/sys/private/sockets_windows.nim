@@ -160,20 +160,23 @@ proc `=destroy`(r: var ResolverResultImpl) =
 template ipResolve() {.dirty.} =
   result = new ResolverResultImpl
 
-  let hints = AddrInfoW(
-    ai_family:
-      if isNone(kind):
-        AF_UNSPEC
-      else:
-        case kind.get
-        of V4: AF_INET
-        of V6: AF_INET6
-  )
+  let
+    hints = AddrInfoW(
+      ai_family:
+        if isNone(kind):
+          AF_UNSPEC
+        else:
+          case kind.get
+          of V4: AF_INET
+          of V6: AF_INET6
+    )
+    hostLStr = L(host)
+    portLStr = if port == PortNone: L"" else: L($port)
 
   let err = GetAddrInfoW(
     # Convert host to wide string then pass the pointer
-    &L(host),
-    &L($port),
+    &hostLStr,
+    &portLStr,
     unsafeAddr hints,
     addr result.info
   )
