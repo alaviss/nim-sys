@@ -101,11 +101,17 @@ proc `=destroy`(r: var ResolverResultImpl) =
     freeaddrinfo(r.info)
     r.info = nil
 
-template ip4Resolve() {.dirty.} =
+template ipResolve() {.dirty.} =
   result = new ResolverResultImpl
 
   let hints = AddrInfo(
-    ai_family: AF_INET,
+    ai_family:
+      if isNone(kind):
+        AF_UNSPEC
+      else:
+        case kind.get
+        of V4: AF_INET
+        of V6: AF_INET6,
     ai_flags: AI_NUMERICSERV
   )
 
@@ -130,7 +136,11 @@ template resolvedItems() {.dirty.} =
   while info != nil:
     if info.ai_addr != nil:
       if info.ai_addr.sa_family == AF_INET.TSa_Family:
-        yield cast[ptr IP4Endpoint](info.ai_addr)[]
+        yield IPEndpoint(kind: V4, v4: cast[ptr IP4Endpoint](info.ai_addr)[])
+      elif info.ai_addr.sa_family == AF_INET6.TSa_Family:
+        yield IPEndpoint(kind: V6, v6: cast[ptr IP6Endpoint](info.ai_addr)[])
+      else:
+        discard "Should not be possible, but harmless even if it is"
 
     info = info.ai_next
 
@@ -153,7 +163,12 @@ proc handleAsyncConnectResult(fd: SocketFD) {.raises: [OSError].} =
     raise newOSError(error, $Error.Connect)
 
 template tcpConnect() {.dirty.} =
-  let sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+  let addressFamily =
+    when endpoint is IP4Endpoint:
+      AF_INET
+    elif endpoint is IP6Endpoint:
+      AF_INET6
+  let sock = makeSocket(addressFamily, SOCK_STREAM, IPPROTO_TCP)
 
   if connect(
     SocketHandle(sock.fd),
@@ -176,7 +191,12 @@ template tcpConnect() {.dirty.} =
   result = Conn[TCP] newSocket(sock)
 
 template tcpAsyncConnect() {.dirty.} =
-  var sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
+  let addressFamily =
+    when endpoint is IP4Endpoint:
+      AF_INET
+    elif endpoint is IP6Endpoint:
+      AF_INET6
+  var sock = makeSocket(addressFamily, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
 
   if connect(
     SocketHandle(sock.fd),
@@ -210,7 +230,13 @@ func maxBacklog(): Natural =
       SOMAXCONN
 
 template tcpListen() {.dirty.} =
-  let sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+  let addressFamily =
+    when endpoint is IP4Endpoint:
+      AF_INET
+    elif endpoint is IP6Endpoint:
+      AF_INET6
+
+  let sock = makeSocket(addressFamily, SOCK_STREAM, IPPROTO_TCP)
 
   # Bind the address to the socket
   posixChk bindSocket(
@@ -227,7 +253,13 @@ template tcpListen() {.dirty.} =
   result = Listener[TCP] newSocket(sock)
 
 template tcpAsyncListen() {.dirty.} =
-  var sock = makeSocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
+  let addressFamily =
+    when endpoint is IP4Endpoint:
+      AF_INET
+    elif endpoint is IP6Endpoint:
+      AF_INET6
+
+  var sock = makeSocket(addressFamily, SOCK_STREAM, IPPROTO_TCP, {sfNonBlock})
 
   if bindSocket(
     SocketHandle(sock.fd),
@@ -303,13 +335,8 @@ proc commonAccept[T](fd: SocketFD, remoteAddr: var T,
   if conn.fd == InvalidFD:
     return
 
-  # TODO: Remove this once IPv6 support lands
-  #
-  # This is used to verify that we are getting IPv4 address.
-  assert remoteLen == SockLen(sizeof remoteAddr):
-    "The length of the endpoint structure does not match assumption. This is a nim-sys bug."
-  assert remoteAddr.sin_family == AF_INET.TSa_Family:
-    "The address is not IPv4. This is a nim-sys bug."
+  assert remoteLen <= SockLen(sizeof remoteAddr):
+    "The length of the endpoint structure is bigger than expected size. This is a nim-sys bug."
 
   when not declared(accept4):
     # On systems without accept4, flags have to be set manually.
@@ -322,16 +349,24 @@ proc commonAccept[T](fd: SocketFD, remoteAddr: var T,
   result = conn
 
 template tcpAccept() {.dirty.} =
-  let conn = commonAccept[IP4Endpoint](l.fd, result.remote)
+  var saddr: SockaddrStorage
+  let conn = commonAccept(l.fd, saddr)
   if conn.fd == InvalidFD:
     raise newOSError(errno, $Error.Accept)
 
   result.conn = Conn[TCP] newSocket(conn)
+  if saddr.ss_family == AF_INET.TSa_Family:
+    result.remote = IPEndpoint(kind: V4, v4: cast[IP4Endpoint](saddr))
+  elif saddr.ss_family == AF_INET6.TSa_Family:
+    result.remote = IPEndpoint(kind: V6, v6: cast[IP6Endpoint](saddr))
+  else:
+    doAssert false, "Unexpected remote address family: " & $saddr.ss_family
 
 template tcpAsyncAccept() {.dirty.} =
   # Loop until we get a connection
   while true:
-    var conn = commonAccept[IP4Endpoint](l.fd, result.remote, {sfNonBlock})
+    var saddr: SockaddrStorage
+    var conn = commonAccept(l.fd, saddr, {sfNonBlock})
 
     if conn.fd == InvalidFD:
       # If the socket signals that no connections are pending
@@ -343,19 +378,32 @@ template tcpAsyncAccept() {.dirty.} =
     else:
       # We got a connection
       result.conn = AsyncConn[TCP] newAsyncSocket(move conn)
+      if saddr.ss_family == AF_INET.TSa_Family:
+        result.remote = IPEndpoint(kind: V4, v4: cast[IP4Endpoint](saddr))
+      elif saddr.ss_family == AF_INET6.TSa_Family:
+        result.remote = IPEndpoint(kind: V6, v6: cast[IP6Endpoint](saddr))
+      else:
+        doAssert false, "Unexpected remote address family: " & $saddr.ss_family
       return
 
 template tcpLocalEndpoint() {.dirty.} =
-  var endpointLen = SockLen sizeof(result)
+  var
+    saddr: SockaddrStorage
+    endpointLen = SockLen sizeof(saddr)
 
   posixChk getsockname(
     SocketHandle l.fd,
-    cast[ptr SockAddr](addr result),
+    cast[ptr SockAddr](addr saddr),
     addr endpointLen
   ):
     $Error.LocalEndpoint
 
-  assert endpointLen == SockLen sizeof(result):
-    "The length of the endpoint structure does not match assumption. This is a nim-sys bug."
-  assert result.sin_family == TSa_Family(AF_INET):
-    "The address is not IPv4. This is a nim-sys bug."
+  assert endpointLen <= SockLen(sizeof saddr):
+    "The length of the endpoint structure is bigger than expected size. This is a nim-sys bug."
+
+  if saddr.ss_family == TSa_Family(AF_INET):
+    result = IPEndpoint(kind: V4, v4: cast[IP4Endpoint](saddr))
+  elif saddr.ss_family == TSa_Family(AF_INET6):
+    result = IPEndpoint(kind: V6, v6: cast[IP6Endpoint](saddr))
+  else:
+    doAssert false, "Unexpected remote address family: " & $saddr.ss_family

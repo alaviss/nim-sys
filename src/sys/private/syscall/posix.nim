@@ -8,7 +8,7 @@
 
 # Seems to be a compiler bug, it shouldn't trigger unused imports for this line.
 import std/posix as std_posix
-export std_posix
+export std_posix except In6Addr, Sockaddr_in6
 
 # XXX: Remove when we fully replace std/posix
 {.used.}
@@ -29,6 +29,23 @@ when defined(bsd) or defined(linux):
   proc dup3*(oldfd, newfd, flags: cint): cint {.importc, header: "<unistd.h>".}
   proc pipe2*(pipefd: var array[2, cint],
               flags: cint): cint {.importc, header: "<unistd.h>".}
+
+type
+  # Overrides the std/posix version to fix the type.
+  In6Addr* {.importc: "struct in6_addr", pure, final,
+             header: "<netinet/in.h>".} = object
+    s6_addr*: array[16, byte]
+
+  In6AddrOrig* = std_posix.In6Addr
+
+  # Fix the wrong types in std/posix
+  Sockaddr_in6* {.importc: "struct sockaddr_in6", pure,
+                  header: "<netinet/in.h>".} = object
+    sin6_family*: TSa_Family
+    sin6_port*: InPort
+    sin6_flowinfo*: uint32
+    sin6_addr*: In6Addr
+    sin6_scope_id*: uint32
 
 template retryOnEIntr*(op: untyped): untyped =
   ## Given a POSIX operation that returns `-1` on error, automatically retry it

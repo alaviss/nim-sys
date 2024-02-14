@@ -1,4 +1,4 @@
-import std/[locks, strutils]
+import std/[locks, strutils, options]
 import pkg/balls
 import sys/[files, ioqueue, sockets]
 import ".."/helpers/io
@@ -10,12 +10,12 @@ makeDelimRead(AsyncConn[TCP])
 suite "TCP sockets":
   test "Listening on TCP port 0 will create a random port":
     let server = listenTcp(IP4Loopback, PortNone)
-    check server.localEndpoint.port != PortNone
+    check server.localEndpoint.v4.port != PortNone
 
     proc checkAsync() {.asyncio.} =
       let asyncServer = listenTcpAsync(IP4Loopback, PortNone)
-      check asyncServer.localEndpoint.port != PortNone
-      check asyncServer.localEndpoint.port != server.localEndpoint.port
+      check asyncServer.localEndpoint.v4.port != PortNone
+      check asyncServer.localEndpoint.v4.port != server.localEndpoint.v4.port
 
     checkAsync()
     run()
@@ -27,13 +27,13 @@ suite "TCP sockets":
         # Accept then close connection immediately
         close s[].accept().conn
 
-    var server = listenTcp("localhost", PortNone)
-    check server.localEndpoint.port != PortNone
+    var server = listenTcp("localhost", PortNone, kind = some(V4))
+    check server.localEndpoint.v4.port != PortNone
     var thr: Thread[ptr Listener[TCP]]
     thr.createThread(acceptWorker, addr server)
 
     # Connect then disconnect immediately
-    close connectTcp("localhost", server.localEndpoint.port)
+    close connectTcp("localhost", server.localEndpoint.v4.port)
 
     # Close the thread
     joinThread thr
@@ -43,15 +43,18 @@ suite "TCP sockets":
       close s.accept().conn
 
     proc checkAsync() {.asyncio.} =
-      let asyncServer = listenTcpAsync("localhost", PortNone)
+      let asyncServer = listenTcpAsync("localhost", PortNone, kind = some(V4))
       # Run until the worker dismisses to the background
       discard trampoline:
         whelp acceptWorker(asyncServer)
 
-      check asyncServer.localEndpoint.port != PortNone
-      check asyncServer.localEndpoint.port != server.localEndpoint.port
+      check asyncServer.localEndpoint.v4.port != PortNone
+      check asyncServer.localEndpoint.v4.port != server.localEndpoint.v4.port
       # Connect then disconnect immediately
-      close connectTcpAsync("localhost", asyncServer.localEndpoint.port)
+      let
+        lEndpoint = asyncServer.localEndpoint.v4
+        port = lEndpoint.port
+      close connectTcpAsync("localhost", port)
 
     checkAsync()
     run()
