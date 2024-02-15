@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.0.1"
+version       = "0.0.3"
 author        = "Leorize"
 description   = "Abstractions for common operating system services"
 license       = "MIT"
