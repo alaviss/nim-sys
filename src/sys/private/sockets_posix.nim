@@ -255,7 +255,7 @@ template tcpListen() {.dirty.} =
     elif endpoint is IP6Endpoint:
       AF_INET6
 
-  let sock = makeSocket(addressFamily, SOCK_STREAM, IPPROTO_TCP)
+  var sock = makeSocket(addressFamily, SOCK_STREAM, IPPROTO_TCP)
 
   socketListen()
 
@@ -419,3 +419,78 @@ template tcpLocalEndpoint() {.dirty.} =
     result = IPEndpoint(kind: V6, v6: cast[IP6Endpoint](saddr))
   else:
     doAssert false, "Unexpected remote address family: " & $saddr.ss_family
+
+proc makeUnixSockaddr(path: string): Sockaddr_un =
+  result.sun_family = AF_UNIX.TSa_Family
+  if path.len >= Sockaddr_un_path_length:
+    raise newOSError(ENAMETOOLONG, "socket path too long")
+  copyMem(addr result.sun_path[0], addr path[0], path.len)
+
+template unixConnect() {.dirty.} =
+  var
+    sock = makeSocket(AF_UNIX, SOCK_STREAM, 0)
+    endpoint = makeUnixSockaddr(path)
+  socketConnect(endpoint, sock)
+  # A move has to be done in CPS
+  result = Conn[Unix] newAsyncSocket(move sock)
+
+template unixAsyncConnect() {.dirty.} =
+  var
+    endpoint = makeUnixSockaddr(path)
+    sock = makeSocket(AF_UNIX, SOCK_STREAM, 0, {sfNonBlock})
+  socketAsyncConnect(endpoint, sock)
+
+  # A move has to be done in CPS
+  result = AsyncConn[Unix] newAsyncSocket(move sock)
+
+template unixListen() {.dirty.} =
+  var
+    endpoint = makeUnixSockaddr(path)
+    sock = makeSocket(AF_UNIX, SOCK_STREAM, 0)
+  socketListen()
+  result = Listener[Unix] newSocket(sock)
+
+template unixAsyncListen() {.dirty.} =
+  var
+    endpoint = makeUnixSockaddr(path)
+    sock = makeSocket(AF_UNIX, SOCK_STREAM, 0, {sfNonBlock})
+  socketAsyncListen()
+  # An explicit move has to be done in CPS
+  result = AsyncListener[Unix] newAsyncSocket(move sock)
+
+template unixAccept() {.dirty.} =
+  var handle = initHandle:
+    SocketFD:
+      retryOnEIntr:
+        when declared(accept4):
+          let flags = SOCK_CLOEXEC
+          accept4(l.fd.SocketHandle, nil, nil, flags)
+        else:
+          accept(l.fd.SocketHandle, nil, nil)
+  if handle.fd == InvalidFD:
+    raise newOSError(errno, $Error.Accept)
+  when not declared(accept4):
+    handle.fd.setInheritable(false)
+  result = Conn[Unix] newSocket(handle)
+
+template unixAsyncAccept() {.dirty.} =
+  while true:
+    var handle = initHandle:
+      SocketFD:
+        retryOnEIntr:
+          when declared(accept4):
+            let flags = SOCK_CLOEXEC or SOCK_NONBLOCK
+            accept4(l.fd.SocketHandle, nil, nil, flags)
+          else:
+            accept(l.fd.SocketHandle, nil, nil)
+    if handle.fd == InvalidFD:
+      if errno == EAGAIN or errno == EWOULDBLOCK:
+        wait(l.fd, Event.Read)
+      else:
+        raise newOSError(errno, $Error.Accept)
+    else:
+      when not declared(accept4):
+        handle.fd.setInheritable(false)
+        handle.fd.setBlocking(false)
+      result = AsyncConn[Unix] newAsyncSocket(move handle)
+      return
