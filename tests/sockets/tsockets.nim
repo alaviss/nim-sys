@@ -7,6 +7,13 @@ makeAccRead(AsyncConn[TCP])
 makeAccWrite(AsyncConn[TCP])
 makeDelimRead(AsyncConn[TCP])
 
+when defined(posix):
+  from std/tempfiles import genTempPath
+  from std/posix import unlink
+  makeAccRead(AsyncConn[Unix])
+  makeAccWrite(AsyncConn[Unix])
+  makeDelimRead(AsyncConn[Unix])
+
 proc getEphemeralPort(kind: IPEndpointKind): Port =
   let endpoint =
     case kind
@@ -555,3 +562,64 @@ suite "TCP sockets":
     runner()
     # Run the IO queue to completion
     run()
+
+when defined(posix):
+  suite "Unix sockets":
+
+    test "Conn[Unix] delimited read/write":
+      let path = genTempPath("tsockets", "unix")
+      defer: discard unlink(path)
+        # Remove the temporary socket on completion.
+
+      proc writeWorker(server: ptr Listener[Unix]) {.thread.} =
+        ## Accepts a connection then write test data to it, closing it afterwards
+        {.gcsafe.}:
+          let conn = server[].accept()
+          # Send the sample data
+          conn.accumlatedWrite TestDelimitedData
+
+      var server = listenUnix(path)
+      var thr: Thread[ptr Listener[Unix]]
+      thr.createThread(writeWorker, addr server)
+
+      # Connect to the server
+      let conn = connectUnix(path)
+
+      # Read from the server and verify the data
+      check conn.delimitedRead(Delimiter) == TestDelimitedData
+
+      # Collect the writer
+      joinThread thr
+
+    test "AsyncConn[Unix] read/write":
+      let path = genTempPath("tsockets", "unix")
+      defer:
+        discard unlink(path)
+
+      proc writeWorker(server: AsyncListener[Unix]) {.asyncio.} =
+        ## Accepts a connection then write test data to it, closing it afterwards
+
+        let conn = server.accept()
+        # Send the sample data
+        conn.accumlatedWrite TestBufferedData
+
+        # Close to signal completion
+        close conn
+
+      proc runner() {.asyncio.} =
+        # Creates the server
+        var server = listenUnixAsync(path)
+        # Run the worker until it is dismissed
+        discard trampoline:
+          whelp writeWorker(server)
+
+        # Connect to the server
+        let conn = connectUnixAsync(path)
+
+        # Retrieve the data
+        check conn.accumlatedRead(TestBufferedData.len + 1024) == TestBufferedData
+
+      # Run the test
+      runner()
+      # Run the IO queue to completion
+      run()

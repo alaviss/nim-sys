@@ -178,6 +178,7 @@ template derive(T, Base: typedesc): untyped =
 type
   Protocol* {.pure.} = enum
     TCP ## Generic TCP socket
+    Unix ## Unix domain socket
 
   Conn*[Protocol: static Protocol] = distinct Socket
     ## A connection with `Protocol`.
@@ -892,3 +893,84 @@ proc accept*(l: AsyncListener[TCP]): tuple[conn: AsyncConn[TCP], remote: IPEndpo
 proc localEndpoint*(l: AsyncListener[TCP] | Listener[TCP]): IPEndpoint {.raises: [OSError].} =
   ## Obtain the local endpoint of `l`.
   tcpLocalEndpoint()
+
+when defined(posix):
+
+  proc connectUnix*(path: string): Conn[Unix]
+                   {.raises: [OSError].} =
+    ## Create a connection to the Unix socket at `path`.
+    ##
+    ##
+    ## Unix sockets are currently only supported on POSIX-like
+    ## platforms (this does not include Windows).
+    ## Unix socket implementations can differ in the maximum
+    ## supported length of path elements as well as the total
+    ## path length.
+    ## On Linux the maximum path length is hardcoded to 107
+    ## characters.
+    unixConnect()
+
+  proc connectUnixAsync*(path: string): AsyncConn[Unix]
+                        {.asyncio.} =
+    ## Create an asynchronous connection to the Unix socket at `path`.
+    ##
+    ## Unix sockets are currently only supported on POSIX-like
+    ## platforms (this does not include Windows).
+    ## Unix socket implementations can differ in the maximum
+    ## supported length of path elements as well as the total
+    ## path length.
+    ## On Linux the maximum path length is hardcoded to 107
+    ## characters.
+    unixAsyncConnect()
+
+  proc listenUnix*(path: string, backlog = none(Natural)): Listener[Unix]
+                  {.raises: [OSError].} =
+    ## Listen at `path` for Unix socket connections.
+    ##
+    ## The `backlog` parameter defines the maximum amount of pending connections.
+    ## If a connection request arrives when the queue is full, the client might
+    ## receive a "Connection refused" error or the connection might be silently
+    ## dropped. This value is treated by most operating systems as a hint.
+    ##
+    ## If `backlog` is `None`, the maximum queue length will be selected.
+    ##
+    ## If `backlog` is `0`, the OS will select a reasonable minimum.
+    ##
+    ## Unix sockets are currently only supported on POSIX-like
+    ## platforms (this does not include Windows).
+    ## Unix socket implementations can differ in the maximum
+    ## supported length of path elements as well as the total
+    ## path length.
+    ## On Linux the maximum path length is hardcoded to 107
+    ## characters.
+    unixListen()
+
+  proc listenUnixAsync*(path: string; backlog: Option[Natural] = none(Natural)): AsyncListener[Unix]
+                       {.asyncio.} =
+    ## Listen at `path` for Unix socket connections asynchronously.
+    ##
+    ## The `backlog` parameter defines the maximum amount of pending connections.
+    ## If a connection request arrives when the queue is full, the client might
+    ## receive a "Connection refused" error or the connection might be silently
+    ## dropped. This value is treated by most operating systems as a hint.
+    ##
+    ## If `backlog` is `None`, the maximum queue length will be selected.
+    ##
+    ## If `backlog` is `0`, the OS will select a reasonable minimum.
+    ##
+    ## Unix sockets are currently only supported on POSIX-like
+    ## platforms (this does not include Windows).
+    ## Unix socket implementations can differ in the maximum
+    ## supported length of path elements as well as the total
+    ## path length.
+    ## On Linux the maximum path length is hardcoded to 107
+    ## characters.
+    unixAsyncListen()
+
+  proc accept*(l: Listener[Unix]): Conn[Unix] {.raises: [OSError].} =
+    ## Return the first connection from the queue of pending connections of `l`.
+    unixAccept()
+
+  proc accept*(l: AsyncListener[Unix]): AsyncConn[Unix] {.asyncio.} =
+    ## Return the first connection from the queue of pending connections of `l`.
+    unixAsyncAccept()
