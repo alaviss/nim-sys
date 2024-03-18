@@ -55,12 +55,22 @@ proc close(s: var SocketObj) {.inline.} =
   ## If `s` is invalid, `ClosedHandleDefect` will be raised.
   close s.handle
 
-proc close(s: var AsyncSocketObj) {.inline.}
+template closeAsync(s: untyped) =
+  ## Forward declaration of `close(AsyncSocketObj)` to avoid issues due to
+  ## `=destroy` being implicitly defined at first usage of type
+  unregister s.handle.fd
+  close SocketObj(s)
 
 proc `=destroy`(s: var AsyncSocketObj) =
   ## Destroy the asynchronous socket `s`.
+  ##
+  ## Note that non-fatal errors are ignored, use `close` instead if those should
+  ## be catched.
   if s.handle.fd != InvalidFD:
-    close(s)
+    try:
+      closeAsync(s)
+    except CatchableError:
+      discard "Nothing can be done here"
 
 proc close(s: var AsyncSocketObj) {.inline.} =
   ## Closes and invalidates the socket `s`.
@@ -68,8 +78,7 @@ proc close(s: var AsyncSocketObj) {.inline.} =
   ## If `s` is invalid, `ClosedHandleDefect` will be raised.
   ##
   ## The FD associated with `s` will be deregistered from `ioqueue`.
-  unregister s.handle.fd
-  close SocketObj(s)
+  closeAsync(s)
 
 proc close*(s: Socket) {.inline.} =
   ## Closes and invalidates the socket `s`.
