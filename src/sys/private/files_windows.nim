@@ -29,7 +29,11 @@ template closeImpl() {.dirty.} =
   close f.handle
 
 template destroyFileImpl() {.dirty.} =
-  cleanupFile f
+  try:
+    cleanupFile f
+  except CatchableError:
+    discard "Nothing can be done here"
+
   `=destroy` f.handle
 
 template newFileImpl() {.dirty.} =
