@@ -92,7 +92,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.7
         with:
           path: nim-sys
           submodules: "recursive"
@@ -145,7 +145,7 @@ jobs:
 
       - name: Fetch nimble source for nimskull
         if: matrix.compiler.name == 'nimskull'
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.7
         with:
           path: nimble
           repository: alaviss/nimble
