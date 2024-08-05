@@ -227,7 +227,7 @@ jobs:
       - name: Upload pages artifact
         if:
           needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
-        uses: actions/upload-artifact@v4.3.1
+        uses: actions/upload-artifact@v4.3.5
         with:
           name: github-pages
           path: page/artifact.tar
