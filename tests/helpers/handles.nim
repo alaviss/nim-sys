@@ -15,7 +15,7 @@
 when defined(posix):
   import sys/private/syscall/posix
 else:
-  import sys/private/syscall/winim/winim
+  import pkg/winim/lean as winim
 
 from sys/handles as sys_handles import FD
 

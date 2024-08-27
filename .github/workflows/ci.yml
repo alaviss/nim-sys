@@ -36,8 +36,6 @@ jobs:
       matrix:
         compiler:
           - name: nim
-            version: devel
-          - name: nim
             version: version-2-0
           - name: nimskull
             version: "*"
@@ -47,36 +45,22 @@ jobs:
           - target: linux
             builder: ubuntu-20.04
           - target: macos
-            builder: macos-11
+            arch: amd64
+            builder: macos-12
           - target: windows
             builder: windows-2019
-          - target: windows
-            arch: i386
-            winlib_arch: i686
-          - target: windows
-            arch: amd64
-            winlib_arch: x86_64
-          - target: linux
-            arch: amd64
-            compiler:
-              name: nim
-              version: devel
-            uploaddocs: true
-          # XXX: nimskull hangs forever trying to build docs
-          - compiler:
-              name: nimskull
-            nodocs: true
+          #- target: linux
+          #  arch: amd64
+          #  compiler:
+          #    name: nim
+          #    version: devel
+          #  uploaddocs: true
+
         exclude:
           - target: macos
             arch: i386
 
-          # TODO: nimskull needs fixes for this to work
-          - target: linux
-            arch: i386
-            compiler:
-              name: nimskull
-
-          # TODO: a handful of problems with SSL must be solved before this
+          # TODO: NimSkull on Windows needs work re: SSL
           - target: windows
             compiler:
               name: nimskull
@@ -95,18 +79,19 @@ jobs:
         uses: actions/checkout@v4.1.1
         with:
           path: nim-sys
-          submodules: "recursive"
 
       - name: Configure Nim for 32 bit GCC (Linux-only)
         if: matrix.arch == 'i386' && runner.os == 'Linux'
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt-fast update -qq
           sudo DEBIAN_FRONTEND='noninteractive' apt-fast install \
             --no-install-recommends -yq \
             gcc-10-i686-linux-gnu \
             g++-10-i686-linux-gnu \
             libc6-dev-i386-cross \
-            libstdc++-10-dev-i386-cross
+            libstdc++-10-dev-i386-cross \
+            libssl1.1:i386
           mkdir -p ~/.config/nim
           cat << EOF > ~/.config/nim/nim.cfg
           cpu = "i386"
@@ -126,7 +111,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: bwoodsend/setup-winlibs-action@v1.15
         with:
-          architecture: ${{ matrix.winlib_arch }}
+          architecture: ${{ (matrix.arch == 'i386' && 'i686') || 'x86_64' }}
 
       - name: Setup Nim
         if: matrix.compiler.name == 'nim'
@@ -215,8 +200,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download github-pages artifact
-        if:
-          needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
+        if: needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
         uses: actions/download-artifact@v4.1.4
         with:
           name: github-pages
@@ -225,8 +209,7 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Upload pages artifact
-        if:
-          needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
+        if: needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
         uses: actions/upload-artifact@v4.3.1
         with:
           name: github-pages

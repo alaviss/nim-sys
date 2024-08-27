@@ -4,7 +4,7 @@ import sys/handles
 import ".."/helpers/handles as helpers_handles
 
 when defined(windows):
-  import sys/private/syscall/winim/winim
+  import pkg/winim/lean as winim
 
   proc CompareObjectHandles(hFirstObjectHandle,
                             hSecondObjectHandle: winim.Handle): WinBool

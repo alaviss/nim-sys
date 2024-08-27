@@ -7,7 +7,7 @@
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
 import std/strformat
-import syscall/winim/winim/core as wincore except Handle
+import pkg/winim/core as wincore except Handle
 import ".." / handles
 import errors
 
@@ -57,7 +57,7 @@ template newPipeImpl() {.dirty.} =
 
       pipeName = generateUniquePipeName()
       rd = CreateNamedPipeA(
-        cstring(pipeName),
+        addr pipeName[0],
         dwOpenMode = PipeAccessInbound or
           FileFlagFirstPipeInstance or
           rdExtraFlags,
@@ -74,7 +74,7 @@ template newPipeImpl() {.dirty.} =
     if rd == InvalidHandleValue:
       raise newOSError(GetLastError(), ErrorPipeCreation)
 
-    let wr = CreateFileA(cstring(pipeName), GenericWrite, dwShareMode = 0, addr sa,
+    let wr = CreateFileA(addr pipeName[0], GenericWrite, dwShareMode = 0, addr sa,
                          OpenExisting, wrExtraFlags,
                          hTemplateFile = cast[wincore.Handle](nil))
 
