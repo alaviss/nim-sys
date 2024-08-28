@@ -12,8 +12,8 @@ import ".."/helpers/utils
 import ".."/helpers/handles as helper_handles
 
 when defined(windows):
-  from sys/private/syscall/winim/winim/inc/windef import MakeWord, LoByte, HiByte
-  import sys/private/syscall/winim/winim/inc/winsock
+  from pkg/winim/inc/windef import MakeWord, LoByte, HiByte
+  import pkg/winim/inc/winsock
 
 suite "Test close() and Handle[T] destructions":
   when defined(windows):

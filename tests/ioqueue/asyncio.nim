@@ -12,7 +12,7 @@ when defined(posix):
   import sys/private/syscall/posix
   import ".."/helpers/handles as helper_handle
 else:
-  import sys/private/syscall/winim/winim except Handle
+  import pkg/winim/lean as winim except Handle
 
 import pkg/cps
 import sys/[files, handles, ioqueue]

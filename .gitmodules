@@ -1,3 +1,0 @@
-[submodule "src/sys/private/syscall/winim"]
-	path = src/sys/private/syscall/winim
-	url = https://github.com/khchen/winim

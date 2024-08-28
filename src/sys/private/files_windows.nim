@@ -8,7 +8,7 @@
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
 from std/os import OSErrorCode
-import syscall/winim/winim/core as wincore except Handle
+import pkg/winim/core as wincore except Handle
 
 type
   FileImpl = object

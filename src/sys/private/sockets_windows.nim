@@ -7,8 +7,8 @@
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
 from std/os import osErrorMsg, OSErrorCode
-import syscall/winim/winim/core as wincore except Handle
-import syscall/winim/winim/winstr
+import pkg/winim/core as wincore except Handle
+import pkg/winim/winstr
 import ".."/ioqueue/iocp
 import errors
 
