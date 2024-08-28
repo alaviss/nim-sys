@@ -4,10 +4,10 @@ import sys/handles
 import ".."/helpers/handles as helpers_handles
 
 when defined(windows):
-  import sys/private/syscall/winim/winim
+  from pkg/winim/core as wincore import nil
 
   proc CompareObjectHandles(hFirstObjectHandle,
-                            hSecondObjectHandle: winim.Handle): WinBool
+                            hSecondObjectHandle: wincore.Handle): wincore.WinBool
                            {.importc, stdcall, dynlib: "kernelbase.dll".}
 
 proc testInheritance(fd: FD, expected: bool) =
@@ -56,8 +56,8 @@ proc inheritanceTester() =
         check fd.isValid() == expected
       else:
         check (CompareObjectHandles(
-          cast[winim.Handle](fd),
-          cast[winim.Handle](reference)
+          cast[wincore.Handle](fd),
+          cast[wincore.Handle](reference)
         ) != 0) == expected, "FD " & $cast[uint](fd) & " is " & inheritMsg
 
 proc main() =

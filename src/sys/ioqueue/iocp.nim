@@ -11,7 +11,7 @@ import pkg/cps
 import ".."/handles
 
 import ".."/private/[ioqueue_common, errors]
-import ".."/private/syscall/winim/winim/core as wincore except Handle, Error
+import pkg/winim/core as wincore except Handle, Error
 
 ## Windows-specific implementation of `ioqueue`.
 ##
