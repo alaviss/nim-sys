@@ -36,8 +36,6 @@ jobs:
       matrix:
         compiler:
           - name: nim
-            version: devel
-          - name: nim
             version: version-2-0
           - name: nimskull
             version: "*"
@@ -60,7 +58,7 @@ jobs:
             arch: amd64
             compiler:
               name: nim
-              version: devel
+              version: version-2-0
             uploaddocs: true
           # XXX: nimskull hangs forever trying to build docs
           - compiler:
