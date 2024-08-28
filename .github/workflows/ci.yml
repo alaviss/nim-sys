@@ -60,10 +60,6 @@ jobs:
               name: nim
               version: version-2-0
             uploaddocs: true
-          # XXX: nimskull hangs forever trying to build docs
-          - compiler:
-              name: nimskull
-            nodocs: true
         exclude:
           - target: macos
             arch: i386
@@ -167,7 +163,6 @@ jobs:
         run: balls
 
       - name: Build docs
-        if: "!matrix.nodocs"
         shell: bash
         run: |
           branch=${{ github.ref }}
