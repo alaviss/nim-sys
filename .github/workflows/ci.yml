@@ -64,12 +64,6 @@ jobs:
           - target: macos
             arch: i386
 
-          # TODO: nimskull needs fixes for this to work
-          - target: linux
-            arch: i386
-            compiler:
-              name: nimskull
-
           # TODO: a handful of problems with SSL must be solved before this
           - target: windows
             compiler:
@@ -93,13 +87,15 @@ jobs:
       - name: Configure Nim for 32 bit GCC (Linux-only)
         if: matrix.arch == 'i386' && runner.os == 'Linux'
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt-fast update -qq
           sudo DEBIAN_FRONTEND='noninteractive' apt-fast install \
             --no-install-recommends -yq \
             gcc-10-i686-linux-gnu \
             g++-10-i686-linux-gnu \
             libc6-dev-i386-cross \
-            libstdc++-10-dev-i386-cross
+            libstdc++-10-dev-i386-cross \
+            libssl1.1:i386
           mkdir -p ~/.config/nim
           cat << EOF > ~/.config/nim/nim.cfg
           cpu = "i386"
