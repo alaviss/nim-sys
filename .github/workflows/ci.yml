@@ -36,8 +36,6 @@ jobs:
       matrix:
         compiler:
           - name: nim
-            version: devel
-          - name: nim
             version: version-2-0
           - name: nimskull
             version: "*"
@@ -47,7 +45,7 @@ jobs:
           - target: linux
             builder: ubuntu-20.04
           - target: macos
-            builder: macos-11
+            builder: macos-12
           - target: windows
             builder: windows-2019
           - target: windows
@@ -60,21 +58,11 @@ jobs:
             arch: amd64
             compiler:
               name: nim
-              version: devel
+              version: version-2-0
             uploaddocs: true
-          # XXX: nimskull hangs forever trying to build docs
-          - compiler:
-              name: nimskull
-            nodocs: true
         exclude:
           - target: macos
             arch: i386
-
-          # TODO: nimskull needs fixes for this to work
-          - target: linux
-            arch: i386
-            compiler:
-              name: nimskull
 
           # TODO: a handful of problems with SSL must be solved before this
           - target: windows
@@ -99,13 +87,15 @@ jobs:
       - name: Configure Nim for 32 bit GCC (Linux-only)
         if: matrix.arch == 'i386' && runner.os == 'Linux'
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt-fast update -qq
           sudo DEBIAN_FRONTEND='noninteractive' apt-fast install \
             --no-install-recommends -yq \
             gcc-10-i686-linux-gnu \
             g++-10-i686-linux-gnu \
             libc6-dev-i386-cross \
-            libstdc++-10-dev-i386-cross
+            libstdc++-10-dev-i386-cross \
+            libssl1.1:i386
           mkdir -p ~/.config/nim
           cat << EOF > ~/.config/nim/nim.cfg
           cpu = "i386"
@@ -169,15 +159,14 @@ jobs:
         run: balls
 
       - name: Build docs
-        if: "!matrix.nodocs"
         shell: bash
         run: |
-          branch=${{ github.ref }}
+          branch=$GITHUB_REF
           branch=${branch##*/}
           for i in src/sys/*.nim src/sys/ioqueue/*.nim; do
-            nimble doc --project --outdir:htmldocs \
-              '--git.url:https://github.com/${{ github.repository }}' \
-              '--git.commit:${{ github.sha }}' \
+            nim doc --project --outdir:htmldocs \
+              "--git.url:https://github.com/$GITHUB_REPOSITORY" \
+              "--git.commit:$GITHUB_SHA" \
               "--git.devel:$branch" \
               "$i"
           done
