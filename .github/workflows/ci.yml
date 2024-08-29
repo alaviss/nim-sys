@@ -45,7 +45,7 @@ jobs:
           - target: linux
             builder: ubuntu-20.04
           - target: macos
-            builder: macos-11
+            builder: macos-12
           - target: windows
             builder: windows-2019
           - target: windows
