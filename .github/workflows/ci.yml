@@ -64,10 +64,12 @@ jobs:
           - target: macos
             arch: i386
 
-          # TODO: a handful of problems with SSL must be solved before this
+          # 32-bit OpenSSL is a pain, so skip
           - target: windows
+            arch: i386
             compiler:
               name: nimskull
+
     name:
       ${{ matrix.target }} on ${{ matrix.arch }} (${{ matrix.compiler.name }}
       ${{ matrix.compiler.version }})
