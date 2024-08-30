@@ -80,7 +80,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.7
         with:
           path: nim-sys
 
@@ -128,13 +128,13 @@ jobs:
       - name: Setup nimskull
         id: nimskull
         if: matrix.compiler.name == 'nimskull'
-        uses: nim-works/setup-nimskull@0.1.0
+        uses: nim-works/setup-nimskull@0.1.2
         with:
           nimskull-version: ${{ matrix.compiler.version }}
 
       - name: Fetch nimble source for nimskull
         if: matrix.compiler.name == 'nimskull'
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@v4.1.7
         with:
           path: nimble
           repository: alaviss/nimble
@@ -204,7 +204,7 @@ jobs:
     steps:
       - name: Download github-pages artifact
         if: needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
-        uses: actions/download-artifact@v4.1.4
+        uses: actions/download-artifact@v4.1.8
         with:
           name: github-pages
           path: page
@@ -213,7 +213,7 @@ jobs:
 
       - name: Upload pages artifact
         if: needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
-        uses: actions/upload-artifact@v4.3.1
+        uses: actions/upload-artifact@v4.3.6
         with:
           name: github-pages
           path: page/artifact.tar
@@ -222,7 +222,7 @@ jobs:
 
       - name: Deploy page
         id: deployment
-        uses: actions/deploy-pages@v4.0.4
+        uses: actions/deploy-pages@v4.0.5
 
   passed:
     needs: build
