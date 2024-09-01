@@ -13,7 +13,7 @@ const
   ValidSeparatorsImpl = {SeparatorImpl, '/'}
 
 type
-  PathParseState = enum
+  PathParseState {.pure.} = enum
     Start
     MaybeRoot
     FoundPrefix
@@ -22,7 +22,7 @@ type
     AtRoot
     PathElement
 
-  PathState = enum
+  PathState {.pure.} = enum
     UncNeedHost
     UncNeedShare
     AtRoot
@@ -154,11 +154,11 @@ template joinImpl() {.dirty.} =
         else:
           discard "This is a DOS drive"
       of UncNeedShare:
-        state = AtRoot
-      of UncNeedHost, AtRoot:
+        state = PathState.AtRoot
+      of UncNeedHost, PathState.AtRoot:
         discard "These states cannot be reached from the start"
     of Root:
-      state = AtRoot
+      state = PathState.AtRoot
     else:
       state = Normal
       break
@@ -176,7 +176,7 @@ template joinImpl() {.dirty.} =
         discard "Nothing to do"
 
       of PreviousDir:
-        if state == AtRoot:
+        if state == PathState.AtRoot:
           continue
 
       else:
