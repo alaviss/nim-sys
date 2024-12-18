@@ -82,7 +82,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v4.2.2
         with:
           path: nim-sys
 
@@ -136,7 +136,7 @@ jobs:
 
       - name: Fetch nimble source for nimskull
         if: matrix.compiler.name == 'nimskull'
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v4.2.2
         with:
           path: nimble
           repository: alaviss/nimble
@@ -215,7 +215,7 @@ jobs:
 
       - name: Upload pages artifact
         if: needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
-        uses: actions/upload-artifact@v4.4.0
+        uses: actions/upload-artifact@v4.5.0
         with:
           name: github-pages
           path: page/artifact.tar
