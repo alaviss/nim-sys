@@ -6,7 +6,7 @@
 # the file "license.txt" included with this distribution. Alternatively,
 # the full text can be found at: https://spdx.org/licenses/MIT.html
 
-import std/[hashes, tables, strutils]
+import std/[hashes, tables, strutils, macros]
 import syscall/linux/epoll except FD, Event
 import syscall/posix
 import errors
@@ -16,7 +16,7 @@ import ioqueue_common
 type
   Waiter = object
     ## Represent a continuation waiting for an event
-    cont: Continuation
+    cont: GenericContinuationVal[ReadyEvent, void]
     event: ReadyEvent
 
   EventQueueImpl = object
@@ -29,6 +29,8 @@ type
       ## epoll might not notify us.
       eventBuffer: seq[epoll.Event] ##
       ## A persistent buffer for receiving events from the kernel
+      ready: seq[Waiter] ##
+      ## Waiters that are ready to be executed
     of false:
       discard
 
@@ -46,7 +48,7 @@ template initImpl() {.dirty.} =
   )
 
 template runningImpl() {.dirty.} =
-  result = eq.initialized and eq.waiters.len > 0
+  result = eq.initialized and (eq.waiters.len > 0 or eq.ready.len > 0)
 
 func toEv(sre: set[ReadyEvent]): Ev =
   ## Convert `sre` into bitflags used by `epoll_ctl`
@@ -76,7 +78,7 @@ func toEvents(ev: Ev): set[Event] =
   if ev.has EvPri:
     result.incl PriorityRead
 
-proc queue(eq: var EventQueueImpl, cont: Continuation, fd: FD, event: ReadyEvent) =
+proc queue(eq: var EventQueueImpl, cont: GenericContinuationVal[ReadyEvent, void], fd: FD, event: ReadyEvent) =
   var epEvent = epoll.Event(events: toEv({event}), data: Data(fd: fd.cint))
   # If adding `fd` to epoll fails
   if eq.epoll.fd.ctl(CtlAdd, fd, epEvent) == -1:
@@ -107,14 +109,25 @@ proc queue(eq: var EventQueueImpl, cont: Continuation, fd: FD, event: ReadyEvent
 
   eq.waiters[fd] = Waiter(cont: cont, event: event)
 
-template pollImpl() {.dirty.} =
+proc drain(eq: var EventQueueImpl) =
+  ## Drain ready events
+  while eq.ready.len > 0:
+    let
+      waiter = eq.ready.pop()
+      (ctx, fn) = waiter.cont
+
+    fn(waiter.event, ctx)
+
+template tickImpl() {.dirty.} =
+  drain(eq)
+
   if not running(): return
 
   let timeout =
-    if timeout.isNone:
+    if waitFor.isNone:
       -1.cint
     else:
-      timeout.get.inMilliseconds.cint
+      waitFor.get.inMilliseconds.cint
 
   # Set the buffer length to the amount of waiters
   eq.eventBuffer.setLen eq.waiters.len
@@ -141,10 +154,12 @@ template pollImpl() {.dirty.} =
     # If the registered event is ready or epoll raised an exceptional event.
     if waiter.event in ready or {Event.Error, Hangup} * ready != {}:
       # Consider the continuation runnable.
-      runnable.add waiter.cont
+      eq.ready.add waiter
     else:
       raise newException(Defect):
         "epoll signalled for events " & $ready & " but the registered event " & $waiter.event & " is not signalled. This is a nim-sys bug."
+
+  drain(eq)
 
 template waitEventImpl() {.dirty.} =
   let fd =

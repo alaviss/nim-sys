@@ -12,10 +12,12 @@
 ## This is not meant to be a full-fledged eventqueue but rather a
 ## supplementary for other queues implementation.
 
-import handles
-import std/[options, times]
-import pkg/cps
-export cps
+import continuations, handles
+import std/[options, times, macros]
+
+when false:
+  import pkg/cps
+  export cps
 
 type
   Event* {.pure.} = enum
@@ -73,40 +75,50 @@ proc init() =
   ## Initializes the event queue for processing.
   initImpl()
 
-template asyncio*(prc: typed): untyped =
-  ## Convenience alias to `{.cps: Continuation.}` for procedures wishing
-  ## to use ioqueue.
-  cps(Continuation, prc)
+when false:
+  template asyncio*(prc: typed): untyped =
+    ## Convenience alias to `{.cps: Continuation.}` for procedures wishing
+    ## to use ioqueue.
+    cps(Continuation, prc)
 
 proc running*(): bool =
   ## Whether there are any continuations within the queue
   runningImpl()
 
-proc poll*(runnable: var seq[Continuation], timeout = none(Duration)) =
-  ## Poll the operating system for events and add continuations of which the
-  ## resources they are waiting for are ready to `runnable`.
+when false:
+  proc poll*(runnable: var seq[Continuation], timeout = none(Duration)) =
+    ## Poll the operating system for events and add continuations of which the
+    ## resources they are waiting for are ready to `runnable`.
+    ##
+    ## If `timeout` is `none(Duration)`, wait indefinitely until the operating
+    ## system signals an event.
+    ## If `timeout` is `DurationZero`, returns immediately iff there aren't any
+    ## continuations ready to be run.
+    ##
+    ## `timeout` is not precise, and the actual wait time depends on the target
+    ## operating system.
+    ##
+    ## If the queue is empty, returns immediately.
+    pollImpl()
+
+proc tick*(waitFor = none(Duration)) =
+  ## Poll the operating system for events and triggers ready continuations.
   ##
-  ## If `timeout` is `none(Duration)`, wait indefinitely until the operating
-  ## system signals an event.
-  ## If `timeout` is `DurationZero`, returns immediately iff there aren't any
-  ## continuations ready to be run.
+  ## If `waitFor` is `none(Duration)`, wait indefinitely until at least one
+  ## event happened.
+  ## If `waitFor` is `DurationZero`, returns immediately if there are no
+  ## ready events.
   ##
-  ## `timeout` is not precise, and the actual wait time depends on the target
+  ## `waitFor` is not precise, and the actual wait time depends on the target
   ## operating system.
   ##
-  ## If the queue is empty, returns immediately.
-  pollImpl()
+  ## If there are no waiters, returns immediately.
+  tickImpl()
 
 proc run*() =
-  ## Wait for events and run all pending continuations in the queue. Stops
-  ## when the queue is empty.
-  var runnable: seq[Continuation]
+  ## Continuously runs events
   while running():
-    # Get the continuations that are ready to be run.
-    poll(runnable)
-    # Run until the list is empty.
-    while runnable.len > 0:
-      discard trampoline runnable.pop()
+    tick()
 
 when not declared(persistImpl):
   template persistImpl() {.dirty.} =
@@ -139,13 +151,11 @@ proc persist*(fd: AnyFD) =
   ##   operation is finished synchronously.
   persistImpl()
 
-using c: Continuation
-
 when not declared(waitEventImpl):
   template waitEventImpl() {.dirty.} =
     {.error: "This operation is not available for your target platform".}
 
-proc wait*(c; fd: AnyFD, event: ReadyEvent): Continuation {.cpsMagic.} =
+proc wait*(c: GenericContinuationVal[ReadyEvent, void], fd: AnyFD, event: ReadyEvent) =
   ## Wait for the specified `fd` to be ready for the given `event`.
   ##
   ## For higher efficiency, only wait for ready state when the `fd` signalled
@@ -166,9 +176,44 @@ proc wait*(c; fd: AnyFD, event: ReadyEvent): Continuation {.cpsMagic.} =
   init()
   waitEventImpl()
 
-proc wait*(c; fd: Handle[AnyFD], event: ReadyEvent): Continuation {.cpsMagic.} =
+proc wait*(c: GenericContinuationVal[ReadyEvent, void], fd: Handle[AnyFD], event: ReadyEvent) {.inline.} =
   ## An overload of `wait` for `Handle`.
   ioqueue.wait(c, fd.fd, event)
+
+proc ready*(fd: FD, event: ReadyEvent): Future[ReadyEvent] =
+  ## Return a `Future` that will resolve once `fd` is ready for the given `event`.
+  type
+    Storage = ref object
+      waker: Waker
+      ready: Option[ReadyEvent]
+
+  proc handleReady(fd: FD, event: ReadyEvent, store: Storage) =
+    let ready = suspend(ReadyEvent, continuation):
+      let c = newGenericContinuation(continuation)
+      wait(c, fd, event)
+
+    if store[].ready.isNone:
+      store[].ready = some(ready)
+      let (ctx, fn) = move store[].waker
+      if fn != nil:
+        fn(ctx)
+
+  makeFuture:
+    let store = Storage()
+    handleReady(fd, event, store)
+
+    while true:
+      let waker = suspend(Waker, continuation):
+        initPending(continuation)
+      if store[].ready.isSome:
+        break
+
+      store[].waker = waker
+
+    store[].ready.unsafeGet
+
+proc ready*(fd: Handle[FD], event: ReadyEvent): Future[ReadyEvent] {.inline.} =
+  ready(fd.fd, event)
 
 when not declared(unregisterImpl):
   template unregisterImpl() {.dirty.} =
