@@ -40,17 +40,22 @@ jobs:
           - name: nimskull
             version: "*"
         target: [linux, macos, windows]
-        arch: [i386, amd64]
+        arch: [amd64, arm64]
         include:
           - target: linux
-            builder: ubuntu-20.04
+            arch: amd64
+            builder: ubuntu-22.04
+          - target: linux
+            arch: arm64
+            builder: ubuntu-22.04-arm
           - target: macos
-            builder: macos-12
+            arch: amd64
+            builder: macos-15-intel
+          - target: macos
+            arch: arm64
+            builder: macos-14
           - target: windows
-            builder: windows-2019
-          - target: windows
-            arch: i386
-            winlib_arch: i686
+            builder: windows-2022
           - target: windows
             arch: amd64
             winlib_arch: x86_64
@@ -61,14 +66,8 @@ jobs:
               version: version-2-0
             uploaddocs: true
         exclude:
-          - target: macos
-            arch: i386
-
-          # 32-bit OpenSSL is a pain, so skip
           - target: windows
-            arch: i386
-            compiler:
-              name: nimskull
+            arch: arm64
 
     name:
       ${{ matrix.target }} on ${{ matrix.arch }} (${{ matrix.compiler.name }}
@@ -82,42 +81,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v6.0.0
         with:
           path: nim-sys
 
-      - name: Configure Nim for 32 bit GCC (Linux-only)
-        if: matrix.arch == 'i386' && runner.os == 'Linux'
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-fast update -qq
-          sudo DEBIAN_FRONTEND='noninteractive' apt-fast install \
-            --no-install-recommends -yq \
-            gcc-10-i686-linux-gnu \
-            g++-10-i686-linux-gnu \
-            libc6-dev-i386-cross \
-            libstdc++-10-dev-i386-cross \
-            libssl1.1:i386
-          mkdir -p ~/.config/nim
-          cat << EOF > ~/.config/nim/nim.cfg
-          cpu = "i386"
-          gcc.exe = "i686-linux-gnu-gcc-10"
-          gcc.cpp.exe = "i686-linux-gnu-g++-10"
-          gcc.linkerexe = "i686-linux-gnu-gcc-10"
-          gcc.cpp.linkerexe = "i686-linux-gnu-g++-10"
-          EOF
-
-      - name: Configure target architecture for Windows (i386)
-        if: matrix.arch == 'i386' && runner.os == 'Windows'
-        run: |
-          mkdir -p "$APPDATA/nim"
-          echo 'cpu = "i386"' >> "$APPDATA/nim/nim.cfg"
-
       - name: Setup GCC (Windows-only)
         if: runner.os == 'Windows'
-        uses: bwoodsend/setup-winlibs-action@v1.15
+        uses: bwoodsend/setup-winlibs-action@v1.16
         with:
           architecture: ${{ matrix.winlib_arch }}
+
+      - name: Add Homebrew libraries to search path (macOS)
+        if: runner.os == 'macOS'
+        run: echo "DYLD_FALLBACK_LIBRARY_PATH=$(brew --prefix)/lib" >> "$GITHUB_ENV"
 
       - name: Setup Nim
         if: matrix.compiler.name == 'nim'
@@ -136,7 +112,7 @@ jobs:
 
       - name: Fetch nimble source for nimskull
         if: matrix.compiler.name == 'nimskull'
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v6.0.0
         with:
           path: nimble
           repository: alaviss/nimble
@@ -206,7 +182,7 @@ jobs:
     steps:
       - name: Download github-pages artifact
         if: needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
-        uses: actions/download-artifact@v4.1.8
+        uses: actions/download-artifact@v6.0.0
         with:
           name: github-pages
           path: page
@@ -215,7 +191,7 @@ jobs:
 
       - name: Upload pages artifact
         if: needs.context.outputs.skip-reason == 'skip_after_successful_duplicate'
-        uses: actions/upload-artifact@v4.4.0
+        uses: actions/upload-artifact@v5.0.0
         with:
           name: github-pages
           path: page/artifact.tar
