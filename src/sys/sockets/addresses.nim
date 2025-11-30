@@ -226,6 +226,9 @@ proc scopeId*(e: IP6Endpoint): ScopeId =
   ## Returns the scope identifier of the endpoint.
   ip6EndpointScopeId()
 
+proc `$`*(e: IP6Endpoint): string =
+  &"[{e.ip}]:{e.port}"
+
 type
   IPEndpointKind* {.pure.} = enum
     ## The address family of an endpoint.
@@ -237,3 +240,8 @@ type
     case kind*: IPEndpointKind
     of V4: v4*: IP4Endpoint
     of V6: v6*: IP6Endpoint
+
+proc `$`*(e: IPEndpoint): string =
+  case e.kind
+  of V4: $e.v4
+  of V6: $e.v6
