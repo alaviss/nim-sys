@@ -81,7 +81,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6.0.1
         with:
           path: nim-sys
 
@@ -112,7 +112,7 @@ jobs:
 
       - name: Fetch nimble source for nimskull
         if: matrix.compiler.name == 'nimskull'
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6.0.1
         with:
           path: nimble
           repository: alaviss/nimble
